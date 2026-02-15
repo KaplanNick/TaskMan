@@ -84,17 +84,38 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
 
     public async Task StartAsync()
     {
-        // Connect to RabbitMQ with retries
-        await ConnectToRabbitMqAsync();
-
-        // Start polling for overdue tasks
-        _ = PollOverdueTasksAsync(_cancellationTokenSource.Token);
-
-        // Start consuming queue messages
-        SubscribeToQueue();
-
-        _logger.LogInformation("Task Reminder Service started");
+        _logger.LogInformation("Starting background tasks");
+        
+        // Fire off background operations without waiting
+        #pragma warning disable CS4014 // Because this call is not awaited, execution continues before the call is completed
+        InitializeRabbitMqAsync();
+        PollOverdueTasksAsync(_cancellationTokenSource.Token);
+        #pragma warning restore CS4014
+        
+        // Return immediately - tasks continue running in background
         await Task.CompletedTask;
+    }
+
+    private async Task InitializeRabbitMqAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Initializing RabbitMQ connection...");
+            await ConnectToRabbitMqAsync();
+            if (GetEnableConsumer())
+            {
+                SubscribeToQueue();
+                _logger.LogInformation("✓ RabbitMQ connected and subscribed to 'Remainder' queue");
+            }
+            else
+            {
+                _logger.LogInformation("RabbitMQ connected; consumer disabled by config");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize RabbitMQ");
+        }
     }
 
     public async Task StopAsync()
@@ -109,6 +130,22 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
     }
 
     private string GetApiBaseUrl() => _configuration["TaskReminder:ApiBaseUrl"] ?? "http://localhost:5000";
+
+    private bool GetEnableConsumer()
+    {
+        var value = _configuration["TaskReminder:EnableConsumer"];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (bool.TryParse(value, out var enabled))
+        {
+            return enabled;
+        }
+
+        return true;
+    }
 
     private async Task PollOverdueTasksAsync(CancellationToken cancellationToken)
     {
@@ -137,7 +174,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                 if (tasks != null && tasks.Any())
                 {
                     var todayUtc = DateTime.UtcNow.Date;
-                    var overdueTasks = tasks.Where(t => t.DueDate.Date < todayUtc).ToList();
+                    var overdueTasks = tasks.Where(t => t.DueDate.Date <= todayUtc).ToList();
 
                     foreach (var task in overdueTasks)
                     {

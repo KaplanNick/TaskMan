@@ -83,8 +83,9 @@ Each task contains:
 - **MUI DataGrid 8.27.1** - Advanced data table
 - **Vite** - Build tool and dev server
 
-### Background Service
-- **.NET Core Worker Service** - Long-running background service
+### Background Service (Windows Service)
+- **.NET Core Worker Service** - Windows Service for long-running tasks
+- **Microsoft.Extensions.Hosting.WindowsServices 8.0.0** - Windows Service integration
 - **RabbitMQ.Client 6.7.0** - Message queue integration
 
 ## 🚀 Quick Start
@@ -286,6 +287,11 @@ The Task Reminder Service uses these RabbitMQ settings (in `TaskReminderService/
     "Password": "admin123",
     "Port": 5672,
     "VirtualHost": "/"
+  },
+  "TaskReminder": {
+    "ApiBaseUrl": "http://localhost:5000",
+    "PollingIntervalSeconds": 10,
+    "EnableConsumer": true
   }
 }
 ```
@@ -327,40 +333,106 @@ The React app will be available at:
 
 ### Start Task Reminder Service (Optional)
 
-The Task Reminder Service automatically polls for overdue tasks and publishes reminders to RabbitMQ. This requires RabbitMQ and the `admin` user to be set up.
+The Task Reminder Service is a **Windows Service** that automatically polls for overdue tasks and publishes reminders to RabbitMQ. This requires RabbitMQ and the `admin` user to be set up.
 
 **Prerequisites:**
 - RabbitMQ running locally on port 5672
 - Admin user created (`admin` / `admin123`)
 - Backend API running on `http://localhost:5000`
 
-**To start the service:**
+#### Option 1: Run in Development Mode (Console)
+
+For testing and development:
 
 ```bash
 cd TaskReminderService
 dotnet run
 ```
 
-**Expected Output:**
+#### Option 2: Install as Windows Service (Production)
+
+To install and run as a Windows Service:
+
+1. **Publish the service in Release mode:**
+```bash
+cd TaskReminderService
+dotnet publish -c Release -o C:\TaskManReminderService
 ```
+
+**Prerequisites:**
+- .NET 10.0 Runtime must be installed on the server
+- Verify with: `dotnet --version`
+
+2. **Install as Windows Service** (requires administrative privileges):
+```powershell
+# Open PowerShell as Administrator
+sc.exe create "TaskManReminderService" binPath="C:\TaskManReminderService\TaskReminderService.exe" start=auto
+```
+
+3. **Start the service:**
+```powershell
+sc.exe start TaskManReminderService
+```
+
+4. **Check service status:**
+```powershell
+sc.exe query TaskManReminderService
+```
+
+Expected output when service is running:
+```
+SERVICE_NAME: TaskManReminderService
+        TYPE               : 10  WIN32_OWN_PROCESS
+        STATE              : 4  RUNNING
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+```
+
+5. **To stop the service:**
+```powershell
+sc.exe stop TaskManReminderService
+```
+
+6. **To uninstall the service:**
+```powershell
+sc.exe delete TaskManReminderService
+```
+
+**Expected Output (when running in console):**
+```
+info: TaskReminderService.Worker[0]
+      Task Reminder Service starting at 02/15/2026 14:51:58 +02:00
 info: TaskReminderService.Services.TaskRemainderService[0]
-      RabbitMQ connection established in service
+      Initializing Task Reminder Service...
 info: TaskReminderService.Services.TaskRemainderService[0]
-      ✓ Subscribed to queue 'Remainder'
+      Starting polling for overdue tasks...
 info: TaskReminderService.Services.TaskRemainderService[0]
-      Task Reminder Service started
+      ✓ Task Reminder Service started successfully
 info: TaskReminderService.Services.TaskRemainderService[0]
-      Checking for overdue tasks...
-warn: TaskReminderService.Services.TaskRemainderService[0]
-      ✓ Hi John Doe your Task is due Fix critical bug in production (Task ID: 1)
+      ✓ RabbitMQ initialized and subscribed to queue
 ```
 
 The service will:
+- Start immediately and return control to Windows Service Manager (non-blocking)
+- Connect to RabbitMQ asynchronously in the background
 - Poll the API every 10 seconds for overdue tasks
 - Publish task reminders to RabbitMQ queue
 - Prevent duplicate reminders within 12-hour window
 - Automatically reconnect if RabbitMQ connection drops
 - Log warnings with the user's full name and task details
+
+**Consumer behavior (self-consume):**
+- By default, the same service also consumes messages from the `Remainder` queue and acknowledges them immediately.
+- This means the queue will often look empty in RabbitMQ UI because messages are processed right away.
+- The queue payload is JSON, while the consumer logs a formatted plain-text reminder line.
+- To see messages pile up in the queue, set `TaskReminder:EnableConsumer` to `false` and restart the service.
+
+**How to view messages in RabbitMQ UI:**
+1. Set `TaskReminder:EnableConsumer` to `false` in `TaskReminderService/appsettings.json`.
+2. Restart the service (or run it in console mode).
+3. Open http://localhost:15672 and check the `Remainder` queue.
+4. Use the "Get messages" section to read messages (this is destructive by default).
+5. Note: the payload will be JSON even though the consumer logs a plain-text reminder.
 
 **Features:**
 - **Queue-based processing**: Fair dispatch with manual acknowledgment
@@ -607,17 +679,18 @@ TaskId | Title              | TagCount | TagNames
 - **DTOs**: Separation of database entities and API contracts
 - **CORS Configuration**: Secure cross-origin access
 
-### 8. Task Reminder Service (RabbitMQ Integration)
-- **Background Worker**: .NET Core Worker Service for long-running tasks
-- **Message Queue**: RabbitMQ for asynchronous task reminder processing
-- **Polling Strategy**: Periodic API polling for overdue tasks (configurable interval)
+### 8. Windows Service with RabbitMQ Integration
+- **Windows Service**: .NET Core Worker Service that can run as a Windows Service
+- **Task Polling**: Pulls overdue tasks from API and inserts into RabbitMQ queue "Remainder"
+- **Queue Subscription**: Same service subscribes to queue and logs reminders
+- **Message Format**: Logs "Hi {UserFullName} your Task is due {TaskTitle} (Task ID: {TaskId})"
+- **Concurrent Updates Handling**:
+  - Thread-safe deduplication using ConcurrentDictionary
+  - Manual acknowledgment prevents message loss
+  - Fair dispatch (BasicQos) for load balancing across multiple instances
+  - Durable queues ensure messages survive service restarts
 - **Deduplication**: In-memory tracking prevents duplicate reminders (12-hour window)
 - **Retry Logic**: Automatic reconnection with exponential backoff
-- **Queue Management**: 
-  - Durable queues for message persistence
-  - Manual acknowledgment for reliable processing
-  - Fair dispatch (BasicQos) for load balancing
-- **Concurrent Safety**: Thread-safe operations using ConcurrentDictionary
 - **Graceful Shutdown**: Proper resource disposal and connection cleanup
 
 ## ✅ Validation Rules

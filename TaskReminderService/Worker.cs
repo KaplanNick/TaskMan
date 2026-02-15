@@ -15,7 +15,8 @@ public class Worker : BackgroundService
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Task Reminder Service starting at {time}", DateTimeOffset.Now);
+        _logger.LogInformation("Task Reminder Service starting");
+        // Call the base method but don't await other initialization here
         await base.StartAsync(cancellationToken);
     }
 
@@ -23,25 +24,40 @@ public class Worker : BackgroundService
     {
         try
         {
+            _logger.LogInformation("Task Reminder Service initialized and running");
+            
+            // Initialize service - this is called in background service context
+            // which is already running in a background thread
             await _taskRemainderService.StartAsync();
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                await Task.Delay(1000, stoppingToken);
-            }
-
-            await _taskRemainderService.StopAsync();
+            
+            // Keep running until cancellation is requested
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Task Reminder Service shutdown requested");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Task Reminder Service encountered an error");
-            throw;
+            _logger.LogError(ex, "Error in Task Reminder Service");
+        }
+        finally
+        {
+            try
+            {
+                await _taskRemainderService.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error stopping service");
+            }
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Task Reminder Service stopped at {time}", DateTimeOffset.Now);
+        _logger.LogInformation("Task Reminder Service stopping");
         await base.StopAsync(cancellationToken);
     }
 }
+
