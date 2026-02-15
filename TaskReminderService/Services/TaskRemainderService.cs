@@ -17,7 +17,8 @@ public interface ITaskRemainderService
 public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
 {
     private IConnection? _connection;
-    private IModel? _channel;
+    private IModel? _publishChannel;
+    private IModel? _consumeChannel;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TaskRemainderService> _logger;
     private readonly HttpClient _httpClient;
@@ -60,7 +61,8 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                 };
 
                 _connection = factory.CreateConnection();
-                _channel = _connection.CreateModel();
+                _publishChannel = _connection.CreateModel();
+                _consumeChannel = _connection.CreateModel();
                 _logger.LogInformation("RabbitMQ connection established successfully");
                 return; // Success
             }
@@ -121,8 +123,10 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
     public async Task StopAsync()
     {
         _cancellationTokenSource.Cancel();
-        _channel?.Close();
-        _channel?.Dispose();
+        _publishChannel?.Close();
+        _publishChannel?.Dispose();
+        _consumeChannel?.Close();
+        _consumeChannel?.Dispose();
         _connection?.Close();
         _connection?.Dispose();
         _logger.LogInformation("Task Reminder Service stopped");
@@ -226,11 +230,11 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             try
             {
                 // Check if channel is available, attempt reconnect if needed
-                if (_channel == null || _connection == null || !_connection.IsOpen)
+                if (_publishChannel == null || _connection == null || !_connection.IsOpen)
                 {
                     _logger.LogWarning("RabbitMQ not available; attempting reconnect...");
                     await ConnectToRabbitMqAsync();
-                    if (_channel == null) 
+                    if (_publishChannel == null) 
                     {
                         _logger.LogError("Failed to reconnect to RabbitMQ, cannot publish reminder");
                         return;
@@ -270,7 +274,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                 });
 
             // Declare queue
-            _channel.QueueDeclare(
+            _publishChannel.QueueDeclare(
                 queue: QUEUE_NAME,
                 durable: true,
                 exclusive: false,
@@ -280,10 +284,10 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
 
             // Publish message
             var body = Encoding.UTF8.GetBytes(message);
-            var properties = _channel.CreateBasicProperties();
+            var properties = _publishChannel.CreateBasicProperties();
             properties.Persistent = true; // Persist message to disk
 
-            _channel.BasicPublish(
+            _publishChannel.BasicPublish(
                 exchange: "",
                 routingKey: QUEUE_NAME,
                 basicProperties: properties,
@@ -303,14 +307,14 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
         try
         {
             // Check if channel is available
-            if (_channel == null)
+            if (_consumeChannel == null)
             {
                 _logger.LogWarning("RabbitMQ channel not available, cannot subscribe to queue");
                 return;
             }
 
             // Declare queue
-            _channel.QueueDeclare(
+            _consumeChannel.QueueDeclare(
                 queue: QUEUE_NAME,
                 durable: true,
                 exclusive: false,
@@ -319,10 +323,10 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             );
 
             // Set prefetch to 1 for fair dispatch
-            _channel.BasicQos(0, 1, false);
+            _consumeChannel.BasicQos(0, 1, false);
 
             // Set up consumer
-            var consumer = new AsyncEventingBasicConsumer(_channel);
+            var consumer = new AsyncEventingBasicConsumer(_consumeChannel);
 
             consumer.Received += async (model, ea) =>
             {
@@ -337,18 +341,18 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                     _logger.LogWarning($"✓ Hi {taskData?.UserFullName} your Task is due {taskData?.Title} (Task ID: {taskData?.TaskId})");
 
                     // Acknowledge message after processing
-                    _channel.BasicAck(ea.DeliveryTag, false);
+                    _consumeChannel.BasicAck(ea.DeliveryTag, false);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing message from queue");
                     // Nack and requeue on error
-                    _channel.BasicNack(ea.DeliveryTag, false, true);
+                    _consumeChannel.BasicNack(ea.DeliveryTag, false, true);
                 }
             };
 
             // Start consuming (with manual acknowledgment)
-            _channel.BasicConsume(
+            _consumeChannel.BasicConsume(
                 queue: QUEUE_NAME,
                 autoAck: false,
                 consumerTag: "TaskRemainderConsumer",
@@ -375,8 +379,10 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             _cancellationTokenSource?.Cancel();
             _cancellationTokenSource?.Dispose();
 
-            _channel?.Close();
-            _channel?.Dispose();
+            _publishChannel?.Close();
+            _publishChannel?.Dispose();
+            _consumeChannel?.Close();
+            _consumeChannel?.Dispose();
 
             _connection?.Close();
             _connection?.Dispose();
