@@ -357,8 +357,16 @@ warn: TaskReminderService.Services.TaskRemainderService[0]
 
 The service will:
 - Poll the API every 10 seconds for overdue tasks
-- Publish task reminders to RabbitMQ
+- Publish task reminders to RabbitMQ queue
+- Prevent duplicate reminders within 12-hour window
+- Automatically reconnect if RabbitMQ connection drops
 - Log warnings with the user's full name and task details
+
+**Features:**
+- **Queue-based processing**: Fair dispatch with manual acknowledgment
+- **Deduplication**: In-memory tracking prevents redundant reminders
+- **Resilience**: Automatic reconnection with retry logic
+- **Concurrent handling**: Safe for multiple service instances
 
 ## 📁 Project Structure
 
@@ -598,6 +606,19 @@ TaskId | Title              | TagCount | TagNames
 - **Status Codes**: Correct HTTP status codes (200, 201, 400, 404, etc.)
 - **DTOs**: Separation of database entities and API contracts
 - **CORS Configuration**: Secure cross-origin access
+
+### 8. Task Reminder Service (RabbitMQ Integration)
+- **Background Worker**: .NET Core Worker Service for long-running tasks
+- **Message Queue**: RabbitMQ for asynchronous task reminder processing
+- **Polling Strategy**: Periodic API polling for overdue tasks (configurable interval)
+- **Deduplication**: In-memory tracking prevents duplicate reminders (12-hour window)
+- **Retry Logic**: Automatic reconnection with exponential backoff
+- **Queue Management**: 
+  - Durable queues for message persistence
+  - Manual acknowledgment for reliable processing
+  - Fair dispatch (BasicQos) for load balancing
+- **Concurrent Safety**: Thread-safe operations using ConcurrentDictionary
+- **Graceful Shutdown**: Proper resource disposal and connection cleanup
 
 ## ✅ Validation Rules
 

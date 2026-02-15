@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 namespace TaskReminderService.Services;
 
@@ -25,6 +26,8 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
     private const int MAX_RETRIES = 5;
     private const int RETRY_DELAY_MS = 2000;
     private bool _disposed = false;
+    private readonly ConcurrentDictionary<int, DateTime> _reminded = new();
+    private readonly TimeSpan _dedupeWindow = TimeSpan.FromHours(12);
 
     public TaskRemainderService(
         IConfiguration configuration,
@@ -138,6 +141,18 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
 
                     foreach (var task in overdueTasks)
                     {
+                        var now = DateTime.UtcNow;
+
+                        // Check deduplication - skip if reminded within window
+                        if (_reminded.TryGetValue(task.Id, out var last) && (now - last) < _dedupeWindow)
+                        {
+                            _logger.LogInformation("Skipping duplicate reminder for TaskId {TaskId} (last reminded {elapsed} ago)", 
+                                task.Id, now - last);
+                            continue;
+                        }
+
+                        // Update reminder timestamp
+                        _reminded[task.Id] = now;
                         await PublishTaskRemainderAsync(task, cancellationToken);
                     }
 
@@ -173,11 +188,16 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
         {
             try
             {
-                // Check if channel is available
-                if (_channel == null || _connection == null)
+                // Check if channel is available, attempt reconnect if needed
+                if (_channel == null || _connection == null || !_connection.IsOpen)
                 {
-                    _logger.LogWarning("RabbitMQ channel not available, skipping task remainder publication");
-                    return;
+                    _logger.LogWarning("RabbitMQ not available; attempting reconnect...");
+                    await ConnectToRabbitMqAsync();
+                    if (_channel == null) 
+                    {
+                        _logger.LogError("Failed to reconnect to RabbitMQ, cannot publish reminder");
+                        return;
+                    }
                 }
 
                 // Fetch user details to get full name
