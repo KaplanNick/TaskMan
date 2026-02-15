@@ -12,6 +12,7 @@ A full-stack web application for managing user tasks with a .NET Core backend, R
 - [Database Setup](#database-setup)
 - [RabbitMQ Setup](#rabbitmq-setup-optional---required-for-task-reminder-service)
 - [Running the Application](#running-the-application)
+- [Test API with Swagger/OpenAPI](#test-api-with-swaggeropenapi)
 - [Project Structure](#project-structure)
 - [API Endpoints](#api-endpoints)
 - [SQL Query - Tasks with Multiple Tags](#sql-query---tasks-with-multiple-tags)
@@ -332,6 +333,33 @@ The React app will be available at:
 - Fully functional CRUD operations
 
 **Note:** The database is automatically created, migrated, and seeded with sample data when you first run the API.
+
+### Test API with Swagger/OpenAPI
+
+The API includes interactive Swagger UI documentation for easy testing of all endpoints:
+
+1. **Open Swagger UI** at: `http://localhost:5000`
+   - You'll see the Swagger interface with all available endpoints
+   - Organized by resource: Tasks, Users, Tags
+
+2. **Test endpoints directly:**
+   - Click on any endpoint to expand it
+   - Click "Try it out" to test the endpoint
+   - Fill in required parameters and request body
+   - Click "Execute" to make the request
+   - View the response, status code, and response headers
+
+3. **Available endpoints include:**
+   - **Tasks**: GET /api/tasks, POST /api/tasks, PUT /api/tasks/{id}, DELETE /api/tasks/{id}
+   - **Users**: GET /api/users, POST /api/users, PUT /api/users/{id}, DELETE /api/users/{id}
+   - **Tags**: GET /api/tags, POST /api/tags, PUT /api/tags/{id}, DELETE /api/tags/{id}
+
+4. **View API documentation:**
+   - Scroll down to see detailed information about request/response schemas
+   - Each DTO shows all required and optional fields with descriptions
+   - Error responses are documented for each endpoint
+
+**Note:** Swagger UI is served at the API root route (`http://localhost:5000`) for easy access.
 
 ### Start Task Reminder Service (Optional)
 

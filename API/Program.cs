@@ -18,6 +18,23 @@ builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITagService, TagService>();
 
+// Add Swagger/OpenAPI
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "TaskMan API",
+        Version = "v1",
+        Description = "Task Management Application API",
+        Contact = new()
+        {
+            Name = "TaskMan Support",
+            Url = new Uri("https://github.com/TaskMan")
+        }
+    });
+});
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -49,6 +66,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseHttpsRedirection();
+
+// Enable Swagger/OpenAPI
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "TaskMan API v1");
+    options.RoutePrefix = string.Empty; // Serve Swagger UI at root
+});
 
 app.UseCors("AllowFrontend");
 
