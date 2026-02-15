@@ -27,7 +27,10 @@ public class AppDbContext : DbContext
             b.Property(x => x.FullName).HasMaxLength(200).IsRequired();
             b.Property(x => x.Telephone).HasMaxLength(50).IsRequired();
             b.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            
+            // Add unique indexes for Email and Telephone
             b.HasIndex(x => x.Email).IsUnique();
+            b.HasIndex(x => x.Telephone).IsUnique();
         });
 
         modelBuilder.Entity<Tag>(b =>

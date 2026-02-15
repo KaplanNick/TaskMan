@@ -1,0 +1,61 @@
+{
+  "users": [
+    {
+      "fullName": "John Doe",
+      "email": "john.doe@example.com",
+      "telephone": "+1-555-0101"
+    },
+    {
+      "fullName": "Jane Smith",
+      "email": "jane.smith@example.com",
+      "telephone": "+1-555-0102"
+    },
+    {
+      "fullName": "Michael Johnson",
+      "email": "michael.johnson@example.com",
+      "telephone": "+1-555-0103"
+    },
+    {
+      "fullName": "Emily Davis",
+      "email": "emily.davis@example.com",
+      "telephone": "+1-555-0104"
+    },
+    {
+      "fullName": "Robert Wilson",
+      "email": "robert.wilson@example.com",
+      "telephone": "+1-555-0105"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Urgent"
+    },
+    {
+      "name": "Work"
+    },
+    {
+      "name": "Personal"
+    },
+    {
+      "name": "Shopping"
+    },
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Finance"
+    },
+    {
+      "name": "Education"
+    },
+    {
+      "name": "Home"
+    },
+    {
+      "name": "Travel"
+    },
+    {
+      "name": "Project"
+    }
+  ]
+}

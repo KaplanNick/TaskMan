@@ -17,15 +17,27 @@ public class TasksController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTaskDto dto)
     {
-        // Find or create user
+        // Model validation
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        // Custom validations
+        var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
+        if (validationError != null)
+            return BadRequest(validationError);
+
+        // Validate user exists
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == dto.UserId);
         if (user is null)
             return BadRequest("User not found.");
 
-        // Get or create tags
-        var tags = await GetOrCreateTagsAsync(dto.TagIds);
-        if (tags.Count == 0)
-            return BadRequest("At least one valid tag is required.");
+        // Validate tag IDs
+        var tagValidationError = await ValidateTagIds(dto.TagIds);
+        if (tagValidationError != null)
+            return BadRequest(tagValidationError);
+
+        // Get tags
+        var tags = await GetTagsByIdsAsync(dto.TagIds);
 
         var task = new API.Entities.Task
         {
@@ -55,6 +67,9 @@ public class TasksController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
+        if (id <= 0)
+            return BadRequest("Invalid task ID.");
+
         var task = await _db.Tasks
             .AsNoTracking()
             .Include(t => t.User)
@@ -81,6 +96,18 @@ public class TasksController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateTaskDto dto)
     {
+        if (id <= 0)
+            return BadRequest("Invalid task ID.");
+
+        // Model validation
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        // Custom validations
+        var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
+        if (validationError != null)
+            return BadRequest(validationError);
+
         var task = await _db.Tasks
             .Include(t => t.TaskTags)
             .FirstOrDefaultAsync(t => t.Id == id);
@@ -88,10 +115,13 @@ public class TasksController : ControllerBase
         if (task is null)
             return NotFound();
 
-        // Get or create tags
-        var tags = await GetOrCreateTagsAsync(dto.TagIds);
-        if (tags.Count == 0)
-            return BadRequest("At least one valid tag is required.");
+        // Validate tag IDs
+        var tagValidationError = await ValidateTagIds(dto.TagIds);
+        if (tagValidationError != null)
+            return BadRequest(tagValidationError);
+
+        // Get tags
+        var tags = await GetTagsByIdsAsync(dto.TagIds);
 
         task.Title = dto.Title.Trim();
         task.Description = dto.Description.Trim();
@@ -116,6 +146,9 @@ public class TasksController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (id <= 0)
+            return BadRequest("Invalid task ID.");
+
         var task = await _db.Tasks.FindAsync(id);
         if (task is null)
             return NotFound();
@@ -126,17 +159,69 @@ public class TasksController : ControllerBase
         return NoContent();
     }
 
-    private async Task<List<Tag>> GetOrCreateTagsAsync(List<int> tagIds)
+    private static string? ValidateTaskDto(string title, string description, DateTime dueDate)
+    {
+        // Check for whitespace-only strings
+        if (string.IsNullOrWhiteSpace(title))
+            return "Title cannot be empty or contain only whitespace.";
+
+        if (string.IsNullOrWhiteSpace(description))
+            return "Description cannot be empty or contain only whitespace.";
+
+        // Trim and check actual length
+        var trimmedTitle = title.Trim();
+        if (trimmedTitle.Length < 3)
+            return "Title must be at least 3 characters after trimming whitespace.";
+
+        var trimmedDescription = description.Trim();
+        if (trimmedDescription.Length < 10)
+            return "Description must be at least 10 characters after trimming whitespace.";
+
+        // Validate due date is not in the past
+        if (dueDate.Date < DateTime.UtcNow.Date)
+            return "Due date cannot be in the past.";
+
+        // Validate due date is not too far in the future (e.g., 10 years)
+        if (dueDate.Date > DateTime.UtcNow.Date.AddYears(10))
+            return "Due date cannot be more than 10 years in the future.";
+
+        return null;
+    }
+
+    private async Task<string?> ValidateTagIds(List<int> tagIds)
     {
         if (tagIds == null || tagIds.Count == 0)
-            return new List<Tag>();
+            return "At least one tag is required.";
 
+        // Check for invalid tag IDs (non-positive)
+        if (tagIds.Any(id => id <= 0))
+            return "All tag IDs must be positive numbers.";
+
+        // Check for duplicate tag IDs
         var distinctIds = tagIds.Distinct().ToList();
-        var tags = await _db.Tags
+        if (distinctIds.Count != tagIds.Count)
+            return "Duplicate tag IDs are not allowed.";
+
+        // Verify all tag IDs exist in database
+        var existingTags = await _db.Tags
             .Where(t => distinctIds.Contains(t.Id))
             .ToListAsync();
 
-        return tags;
+        if (existingTags.Count != distinctIds.Count)
+        {
+            var missingIds = distinctIds.Except(existingTags.Select(t => t.Id)).ToList();
+            return $"The following tag IDs do not exist: {string.Join(", ", missingIds)}";
+        }
+
+        return null;
+    }
+
+    private async Task<List<Tag>> GetTagsByIdsAsync(List<int> tagIds)
+    {
+        var distinctIds = tagIds.Distinct().ToList();
+        return await _db.Tags
+            .Where(t => distinctIds.Contains(t.Id))
+            .ToListAsync();
     }
 
     private static TaskDto MapToDto(API.Entities.Task task) =>
