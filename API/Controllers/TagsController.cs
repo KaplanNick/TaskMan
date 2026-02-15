@@ -1,13 +1,10 @@
 using API.DTOs;
 using API.Interfaces;
-using API.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-[ApiController]
-[Route("api/[controller]")]
-public class TagsController : ControllerBase
+public class TagsController : BaseApiController
 {
     private readonly ITagService _tagService;
 
@@ -26,8 +23,9 @@ public class TagsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid tag ID." });
+        var validationResult = ValidateId(id, "tag");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _tagService.GetByIdAsync(id);
         return HandleResult(result, Ok);
@@ -36,11 +34,9 @@ public class TagsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TagDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var validationResult = ValidateModelState();
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _tagService.CreateAsync(dto);
         return HandleResult(result, created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created));
@@ -49,14 +45,13 @@ public class TagsController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] TagDto dto)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid tag ID." });
+        var idValidation = ValidateId(id, "tag");
+        if (idValidation != null)
+            return idValidation;
 
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var modelValidation = ValidateModelState();
+        if (modelValidation != null)
+            return modelValidation;
 
         var result = await _tagService.UpdateAsync(id, dto);
         return HandleResult(result, Ok);
@@ -65,24 +60,11 @@ public class TagsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid tag ID." });
+        var validationResult = ValidateId(id, "tag");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _tagService.DeleteAsync(id);
         return HandleResult(result, _ => NoContent());
-    }
-
-    private IActionResult HandleResult<T>(ServiceResult<T> result, Func<T, IActionResult> onSuccess)
-    {
-        if (result.Success && result.Value != null)
-            return onSuccess(result.Value);
-
-        return result.ErrorType switch
-        {
-            ServiceErrorType.NotFound => NotFound(),
-            ServiceErrorType.Validation => BadRequest(new { message = result.ErrorMessage ?? "Invalid input" }),
-            ServiceErrorType.Database => StatusCode(500, new { message = result.ErrorMessage ?? "Database error" }),
-            _ => StatusCode(500, new { message = result.ErrorMessage ?? "Unexpected error" })
-        };
     }
 }

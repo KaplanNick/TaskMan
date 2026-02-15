@@ -6,18 +6,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
 
-public class TagService : ITagService
+public class TagService : BaseService, ITagService
 {
-    private readonly AppDbContext _db;
-
-    public TagService(AppDbContext db)
+    public TagService(AppDbContext db) : base(db)
     {
-        _db = db;
     }
 
     public async Task<ServiceResult<TagDto>> GetByIdAsync(int id)
     {
-        var tag = await _db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        var tag = await Db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
         return tag is null
             ? ServiceResult<TagDto>.NotFound()
             : ServiceResult<TagDto>.Ok(new TagDto { Id = tag.Id, Name = tag.Name });
@@ -25,102 +22,86 @@ public class TagService : ITagService
 
     public async Task<ServiceResult<List<TagDto>>> GetAllAsync()
     {
-        try
+        return await ExecuteQueryAsync(async () =>
         {
-            var tags = await _db.Tags
+            var tags = await Db.Tags
                 .AsNoTracking()
                 .OrderBy(t => t.Name)
                 .ToListAsync();
 
-            var tagDtos = tags.Select(t => new TagDto { Id = t.Id, Name = t.Name }).ToList();
-            return ServiceResult<List<TagDto>>.Ok(tagDtos);
-        }
-        catch (Exception)
-        {
-            return ServiceResult<List<TagDto>>.Fail(ServiceErrorType.Database, "Failed to retrieve tags");
-        }
+            return tags.Select(t => new TagDto { Id = t.Id, Name = t.Name }).ToList();
+        }, "Failed to retrieve tags");
     }
 
     public async Task<ServiceResult<TagDto>> CreateAsync(TagDto dto)
     {
-        var validationError = await ValidateTagName(dto.Name, null);
-        if (validationError != null)
-            return ServiceResult<TagDto>.Fail(ServiceErrorType.Validation, validationError);
+        var validationResult = ValidateOrFail<TagDto>(await ValidateTagName(dto.Name, null));
+        if (validationResult != null)
+            return validationResult;
 
         var tag = new Tag { Name = dto.Name.Trim() };
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            _db.Tags.Add(tag);
-            await _db.SaveChangesAsync();
-            return ServiceResult<TagDto>.Ok(new TagDto { Id = tag.Id, Name = tag.Name });
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<TagDto>.Fail(ServiceErrorType.Database, "Failed to create tag due to database error");
-        }
+            Db.Tags.Add(tag);
+            await Db.SaveChangesAsync();
+            return new TagDto { Id = tag.Id, Name = tag.Name };
+        }, "Failed to create tag");
     }
 
     public async Task<ServiceResult<TagDto>> UpdateAsync(int id, TagDto dto)
     {
-        var tag = await _db.Tags.FindAsync(id);
+        var tag = await Db.Tags.FindAsync(id);
         if (tag is null)
             return ServiceResult<TagDto>.NotFound();
 
-        var validationError = await ValidateTagName(dto.Name, id);
-        if (validationError != null)
-            return ServiceResult<TagDto>.Fail(ServiceErrorType.Validation, validationError);
+        var validationResult = ValidateOrFail<TagDto>(await ValidateTagName(dto.Name, id));
+        if (validationResult != null)
+            return validationResult;
 
         tag.Name = dto.Name.Trim();
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            await _db.SaveChangesAsync();
-            return ServiceResult<TagDto>.Ok(new TagDto { Id = tag.Id, Name = tag.Name });
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<TagDto>.Fail(ServiceErrorType.Database, "Failed to update tag due to database error");
-        }
+            await Db.SaveChangesAsync();
+            return new TagDto { Id = tag.Id, Name = tag.Name };
+        }, "Failed to update tag");
     }
 
     public async Task<ServiceResult<bool>> DeleteAsync(int id)
     {
-        var tag = await _db.Tags
+        var tag = await Db.Tags
             .Include(t => t.TaskTags)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (tag is null)
             return ServiceResult<bool>.NotFound();
 
-        if (tag.TaskTags.Any())
-        {
-            return ServiceResult<bool>.Fail(
-                ServiceErrorType.Validation,
-                $"Cannot delete tag '{tag.Name}' because it is assigned to {tag.TaskTags.Count} task(s)."
-            );
-        }
+        var dependencyCheck = ValidateNoDependencies<bool>(
+            tag.TaskTags.Any(),
+            $"tag '{tag.Name}'",
+            "task(s)",
+            tag.TaskTags.Count);
+        if (dependencyCheck != null)
+            return dependencyCheck;
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            _db.Tags.Remove(tag);
-            await _db.SaveChangesAsync();
-            return ServiceResult<bool>.Ok(true);
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<bool>.Fail(ServiceErrorType.Database, "Failed to delete tag due to database error");
-        }
+            Db.Tags.Remove(tag);
+            await Db.SaveChangesAsync();
+            return true;
+        }, "Failed to delete tag");
     }
 
     private async Task<string?> ValidateTagName(string name, int? excludeId)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return "Tag name cannot be empty or contain only whitespace.";
+        var emptyCheck = ValidateNotEmpty(name, "Tag name");
+        if (emptyCheck != null)
+            return emptyCheck;
 
         var trimmedName = name.Trim();
 
-        var query = _db.Tags.Where(t => t.Name.ToLower() == trimmedName.ToLower());
+        var query = Db.Tags.Where(t => t.Name.ToLower() == trimmedName.ToLower());
         if (excludeId.HasValue)
             query = query.Where(t => t.Id != excludeId.Value);
 

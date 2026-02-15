@@ -1,13 +1,10 @@
 using API.DTOs;
 using API.Interfaces;
-using API.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-[ApiController]
-[Route("api/[controller]")]
-public class UsersController : ControllerBase
+public class UsersController : BaseApiController
 {
     private readonly IUserService _userService;
 
@@ -26,8 +23,9 @@ public class UsersController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid user ID." });
+        var validationResult = ValidateId(id, "user");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _userService.GetByIdAsync(id);
         return HandleResult(result, Ok);
@@ -36,11 +34,9 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var validationResult = ValidateModelState();
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _userService.CreateAsync(dto);
         return HandleResult(result, created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created));
@@ -49,14 +45,13 @@ public class UsersController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto dto)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid user ID." });
+        var idValidation = ValidateId(id, "user");
+        if (idValidation != null)
+            return idValidation;
 
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var modelValidation = ValidateModelState();
+        if (modelValidation != null)
+            return modelValidation;
 
         var result = await _userService.UpdateAsync(id, dto);
         return HandleResult(result, Ok);
@@ -65,24 +60,11 @@ public class UsersController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid user ID." });
+        var validationResult = ValidateId(id, "user");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _userService.DeleteAsync(id);
         return HandleResult(result, _ => NoContent());
-    }
-
-    private IActionResult HandleResult<T>(ServiceResult<T> result, Func<T, IActionResult> onSuccess)
-    {
-        if (result.Success && result.Value != null)
-            return onSuccess(result.Value);
-
-        return result.ErrorType switch
-        {
-            ServiceErrorType.NotFound => NotFound(),
-            ServiceErrorType.Validation => BadRequest(new { message = result.ErrorMessage ?? "Invalid input" }),
-            ServiceErrorType.Database => StatusCode(500, new { message = result.ErrorMessage ?? "Database error" }),
-            _ => StatusCode(500, new { message = result.ErrorMessage ?? "Unexpected error" })
-        };
     }
 }

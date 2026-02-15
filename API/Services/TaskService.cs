@@ -6,28 +6,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
 
-public class TaskService : ITaskService
+public class TaskService : BaseService, ITaskService
 {
-    private readonly AppDbContext _db;
-
-    public TaskService(AppDbContext db)
+    public TaskService(AppDbContext db) : base(db)
     {
-        _db = db;
     }
 
     public async Task<ServiceResult<TaskDto>> CreateAsync(CreateTaskDto dto)
     {
-        var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
-        if (validationError != null)
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, validationError);
+        var validationResult = ValidateOrFail<TaskDto>(ValidateTaskDto(dto.Title, dto.Description, dto.DueDate));
+        if (validationResult != null)
+            return validationResult;
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == dto.UserId);
+        var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == dto.UserId);
         if (user is null)
             return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, "User not found.");
 
-        var tagValidationError = await ValidateTagIds(dto.TagIds);
-        if (tagValidationError != null)
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, tagValidationError);
+        var tagValidationResult = ValidateOrFail<TaskDto>(await ValidateTagIds(dto.TagIds));
+        if (tagValidationResult != null)
+            return tagValidationResult;
 
         var tags = await GetTagsByIdsAsync(dto.TagIds);
 
@@ -43,28 +40,24 @@ public class TaskService : ITaskService
         foreach (var tag in tags)
             task.TaskTags.Add(new TaskTag { TagId = tag.Id });
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            _db.Tasks.Add(task);
-            await _db.SaveChangesAsync();
+            Db.Tasks.Add(task);
+            await Db.SaveChangesAsync();
 
-            var created = await _db.Tasks
+            var created = await Db.Tasks
                 .AsNoTracking()
                 .Include(t => t.User)
                 .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
                 .FirstAsync(t => t.Id == task.Id);
 
-            return ServiceResult<TaskDto>.Ok(MapToDto(created));
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Database, "Failed to create task due to database error");
-        }
+            return MapToDto(created);
+        }, "Failed to create task");
     }
 
     public async Task<ServiceResult<TaskDto>> GetByIdAsync(int id)
     {
-        var task = await _db.Tasks
+        var task = await Db.Tasks
             .AsNoTracking()
             .Include(t => t.User)
             .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
@@ -77,9 +70,9 @@ public class TaskService : ITaskService
 
     public async Task<ServiceResult<List<TaskDto>>> GetAllAsync()
     {
-        try
+        return await ExecuteQueryAsync(async () =>
         {
-            var tasks = await _db.Tasks
+            var tasks = await Db.Tasks
                 .AsNoTracking()
                 .Include(t => t.User)
                 .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
@@ -87,35 +80,30 @@ public class TaskService : ITaskService
                 .Take(200)
                 .ToListAsync();
 
-            var taskDtos = tasks.Select(MapToDto).ToList();
-            return ServiceResult<List<TaskDto>>.Ok(taskDtos);
-        }
-        catch (Exception)
-        {
-            return ServiceResult<List<TaskDto>>.Fail(ServiceErrorType.Database, "Failed to retrieve tasks");
-        }
+            return tasks.Select(MapToDto).ToList();
+        }, "Failed to retrieve tasks");
     }
 
     public async Task<ServiceResult<TaskDto>> UpdateAsync(int id, UpdateTaskDto dto)
     {
-        var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
-        if (validationError != null)
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, validationError);
+        var validationResult = ValidateOrFail<TaskDto>(ValidateTaskDto(dto.Title, dto.Description, dto.DueDate));
+        if (validationResult != null)
+            return validationResult;
 
-        var task = await _db.Tasks
+        var task = await Db.Tasks
             .Include(t => t.TaskTags)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (task is null)
             return ServiceResult<TaskDto>.NotFound();
 
-        var tagValidationError = await ValidateTagIds(dto.TagIds);
-        if (tagValidationError != null)
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, tagValidationError);
+        var tagValidationResult = ValidateOrFail<TaskDto>(await ValidateTagIds(dto.TagIds));
+        if (tagValidationResult != null)
+            return tagValidationResult;
 
         var tags = await GetTagsByIdsAsync(dto.TagIds);
 
-        var userExists = await _db.Users.AnyAsync(u => u.Id == task.UserId);
+        var userExists = await Db.Users.AnyAsync(u => u.Id == task.UserId);
         if (!userExists)
             return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, "Assigned user no longer exists");
 
@@ -128,40 +116,32 @@ public class TaskService : ITaskService
         foreach (var tag in tags)
             task.TaskTags.Add(new TaskTag { TagId = tag.Id });
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            await _db.SaveChangesAsync();
+            await Db.SaveChangesAsync();
 
-            var updated = await _db.Tasks
+            var updated = await Db.Tasks
                 .AsNoTracking()
                 .Include(t => t.User)
                 .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
                 .FirstAsync(t => t.Id == id);
 
-            return ServiceResult<TaskDto>.Ok(MapToDto(updated));
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<TaskDto>.Fail(ServiceErrorType.Database, "Failed to update task due to database error");
-        }
+            return MapToDto(updated);
+        }, "Failed to update task");
     }
 
     public async Task<ServiceResult<bool>> DeleteAsync(int id)
     {
-        var task = await _db.Tasks.FindAsync(id);
+        var task = await Db.Tasks.FindAsync(id);
         if (task is null)
             return ServiceResult<bool>.NotFound();
 
-        try
+        return await ExecuteDatabaseOperationAsync(async () =>
         {
-            _db.Tasks.Remove(task);
-            await _db.SaveChangesAsync();
-            return ServiceResult<bool>.Ok(true);
-        }
-        catch (DbUpdateException)
-        {
-            return ServiceResult<bool>.Fail(ServiceErrorType.Database, "Failed to delete task due to database error");
-        }
+            Db.Tasks.Remove(task);
+            await Db.SaveChangesAsync();
+            return true;
+        }, "Failed to delete task");
     }
 
     private static string? ValidateTaskDto(string title, string description, DateTime dueDate)
@@ -201,7 +181,7 @@ public class TaskService : ITaskService
         if (distinctIds.Count != tagIds.Count)
             return "Duplicate tag IDs are not allowed.";
 
-        var existingTags = await _db.Tags
+        var existingTags = await Db.Tags
             .Where(t => distinctIds.Contains(t.Id))
             .ToListAsync();
 
@@ -217,7 +197,7 @@ public class TaskService : ITaskService
     private async Task<List<Tag>> GetTagsByIdsAsync(List<int> tagIds)
     {
         var distinctIds = tagIds.Distinct().ToList();
-        return await _db.Tags
+        return await Db.Tags
             .Where(t => distinctIds.Contains(t.Id))
             .ToListAsync();
     }

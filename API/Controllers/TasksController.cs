@@ -1,13 +1,10 @@
 using API.DTOs;
 using API.Interfaces;
-using API.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
-[ApiController]
-[Route("api/[controller]")]
-public class TasksController : ControllerBase
+public class TasksController : BaseApiController
 {
     private readonly ITaskService _taskService;
 
@@ -16,11 +13,9 @@ public class TasksController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTaskDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var validationResult = ValidateModelState();
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _taskService.CreateAsync(dto);
         return HandleResult(result, created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created));
@@ -29,8 +24,9 @@ public class TasksController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid task ID." });
+        var validationResult = ValidateId(id, "task");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _taskService.GetByIdAsync(id);
         return HandleResult(result, Ok);
@@ -46,14 +42,13 @@ public class TasksController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateTaskDto dto)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid task ID." });
+        var idValidation = ValidateId(id, "task");
+        if (idValidation != null)
+            return idValidation;
 
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
-        }
+        var modelValidation = ValidateModelState();
+        if (modelValidation != null)
+            return modelValidation;
 
         var result = await _taskService.UpdateAsync(id, dto);
         return HandleResult(result, Ok);
@@ -62,24 +57,11 @@ public class TasksController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        if (id <= 0)
-            return BadRequest(new { message = "Invalid task ID." });
+        var validationResult = ValidateId(id, "task");
+        if (validationResult != null)
+            return validationResult;
 
         var result = await _taskService.DeleteAsync(id);
         return HandleResult(result, _ => NoContent());
-    }
-
-    private IActionResult HandleResult<T>(ServiceResult<T> result, Func<T, IActionResult> onSuccess)
-    {
-        if (result.Success && result.Value != null)
-            return onSuccess(result.Value);
-
-        return result.ErrorType switch
-        {
-            ServiceErrorType.NotFound => NotFound(),
-            ServiceErrorType.Validation => BadRequest(new { message = result.ErrorMessage ?? "Invalid input" }),
-            ServiceErrorType.Database => StatusCode(500, new { message = result.ErrorMessage ?? "Database error" }),
-            _ => StatusCode(500, new { message = result.ErrorMessage ?? "Unexpected error" })
-        };
     }
 }
