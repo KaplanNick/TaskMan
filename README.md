@@ -23,6 +23,8 @@ A full-stack web application for managing user tasks with a .NET Core backend, R
 
 TaskMan is a comprehensive task management system that allows users to create, view, update, and delete tasks with detailed information including user assignments, priorities, due dates, and multiple tags. The application features a modern, responsive UI with real-time state management and robust validation on both frontend and backend.
 
+The architecture emphasizes code reusability, maintainability, and type safety through base patterns, centralized configuration, and composable components, ensuring consistent behavior across the application.
+
 ## ✨ Features
 
 ### Task Management
@@ -447,6 +449,7 @@ The service will:
 TaskMan/
 ├── API/                                 # Backend .NET Core API
 │   ├── Controllers/                    # API Controllers
+│   │   ├── BaseApiController.cs       # Base controller with shared methods
 │   │   ├── TasksController.cs         # Task CRUD operations
 │   │   ├── UsersController.cs         # User CRUD operations
 │   │   └── TagsController.cs          # Tag CRUD operations
@@ -468,11 +471,21 @@ TaskMan/
 │   │   ├── Tag.cs                     # Tag entity
 │   │   ├── TaskTag.cs                 # Junction table for N:N
 │   │   └── TaskPriority.cs            # Priority enum
+│   ├── Errors/                        # Custom exception classes
+│   │   ├── ApiException.cs            # Base API exception
+│   │   ├── ValidationException.cs     # Validation error exception
+│   │   ├── NotFoundException.cs       # Resource not found exception
+│   │   └── DatabaseException.cs       # Database operation exception
 │   ├── Interfaces/                    # Service interfaces
 │   │   ├── ITaskService.cs            # Task service interface
 │   │   ├── IUserService.cs            # User service interface
 │   │   └── ITagService.cs             # Tag service interface
+│   ├── Mappers/                       # Entity-DTO mapping classes
+│   │   ├── TagMapper.cs               # Tag entity/DTO conversions
+│   │   ├── UserMapper.cs              # User entity/DTO conversions
+│   │   └── TaskMapper.cs              # Task entity/DTO conversions
 │   ├── Services/                      # Business logic layer
+│   │   ├── BaseService.cs             # Base service with shared methods
 │   │   ├── TaskService.cs             # Task service implementation
 │   │   ├── UserService.cs             # User service implementation
 │   │   ├── TagService.cs              # Tag service implementation
@@ -485,7 +498,12 @@ TaskMan/
 ├── client/                            # Frontend React Application
 │   ├── src/
 │   │   ├── components/               # Reusable components
-│   │   │   └── Navbar.tsx            # Navigation bar component
+│   │   │   ├── Navbar.tsx            # Navigation bar component
+│   │   │   ├── BaseForm.tsx          # Base form layout component
+│   │   │   ├── FormAlerts.tsx        # Form alerts component
+│   │   │   ├── FormActions.tsx       # Form action buttons component
+│   │   │   ├── useFormState.ts       # Custom hook for form state
+│   │   │   └── index.ts              # Component exports
 │   │   ├── pages/                    # Page components
 │   │   │   ├── Layout.tsx            # Main layout with routing
 │   │   │   ├── NewTaskForm.tsx       # Create task page
@@ -494,18 +512,23 @@ TaskMan/
 │   │   │   ├── NewUserForm.tsx       # Create user page
 │   │   │   └── NewTagForm.tsx        # Create tag page
 │   │   ├── services/                 # API service layer (RTK Query)
+│   │   │   ├── baseApi.ts            # Base API configuration
 │   │   │   ├── tasksApi.ts           # Task API endpoints
 │   │   │   ├── usersApi.ts           # User API endpoints
-│   │   │   └── tagsApi.ts            # Tag API endpoints
+│   │   │   ├── tagsApi.ts            # Tag API endpoints
+│   │   │   └── index.ts              # Service exports
 │   │   ├── store/                    # Redux store configuration
 │   │   │   ├── store.ts              # Store setup
 │   │   │   └── hooks.ts              # Typed Redux hooks
 │   │   ├── types/                    # TypeScript type definitions
-│   │   │   └── api.ts                # API types
+│   │   │   ├── api.ts                # API types
+│   │   │   ├── dtos.ts               # DTO type definitions
+│   │   │   └── index.ts              # Type exports
 │   │   ├── validation/               # Form validation logic
-│   │   │   ├── taskValidation.ts
-│   │   │   ├── userValidation.ts
-│   │   │   └── tagValidation.ts
+│   │   │   ├── validators.ts         # Reusable validation utilities
+│   │   │   ├── taskValidation.ts     # Task-specific validation
+│   │   │   ├── userValidation.ts     # User-specific validation
+│   │   │   └── tagValidation.ts      # Tag-specific validation
 │   │   ├── App.tsx                   # Root component
 │   │   ├── main.tsx                  # Application entry
 │   │   └── index.css                 # Global styles
@@ -632,7 +655,41 @@ TaskId | Title              | TagCount | TagNames
 
 ## 🔑 Key Implementations
 
-### 1. Service Layer Architecture
+### 1. Base Controller Pattern
+- **BaseApiController**: Centralized controller logic with shared methods
+- **HandleResult<T>**: Maps ServiceResult to ActionResult with proper HTTP status codes
+- **ValidateId**: Standardized ID validation across all controllers
+- **ValidateModelState**: Automatic model state validation
+- **Code Reuse**: Shared error handling logic across controllers
+- **Inheritance**: All controllers (Tasks, Users, Tags) inherit from BaseApiController
+
+### 2. Custom Exception Handling
+- **ApiException**: Base exception class for all API errors
+- **ValidationException**: For validation failures
+- **NotFoundException**: For missing resources
+- **DatabaseException**: Wraps database operation errors
+- **Structured Errors**: Consistent error format across the application
+- **Type Safety**: Typed exception classes enable specific error handling
+
+### 3. Base Service Pattern
+- **BaseService**: Shared service layer functionality
+- **ExecuteDatabaseOperationAsync**: Wraps database writes with exception handling
+- **ExecuteQueryAsync**: Wraps queries with exception handling
+- **ValidateOrFail**: Throws ValidationException for invalid operations
+- **ValidateNoDependencies**: Checks for dependent entities before deletion
+- **ValidateNotEmpty**: String validation helper
+- **Error Conversion**: Transforms exceptions into ServiceResult errors
+
+### 4. Entity-DTO Mapping Layer
+- **Mapper Classes**: Separate mapping logic from business logic
+- **TagMapper, UserMapper, TaskMapper**: Static classes for conversions
+- **ToDto**: Converts entities to DTOs for API responses
+- **ToEntity**: Converts DTOs to entities for database operations
+- **UpdateEntity**: Updates existing entities from DTOs
+- **ToDtoList**: Batch conversion for collections
+- **Maintainability**: Centralized mapping logic
+
+### 5. Service Layer Architecture
 - **Interface-Based Design**: Service contracts in `API/Interfaces` directory
 - **Dependency Injection**: Services registered in DI container with scoped lifetime
 - **Service Result Pattern**: Generic `ServiceResult<T>` wrapper for consistent error handling
@@ -640,7 +697,34 @@ TaskId | Title              | TagCount | TagNames
 - **Error Type Enum**: Standardized error types (Validation, NotFound, Database, Unknown)
 - **Testability**: Interface-based design enables easy unit testing and mocking
 
-### 2. Entity Framework Configuration
+### 6. Client API Architecture (RTK Query)
+- **baseApi**: Centralized API configuration using createApi
+- **Endpoint Injection**: All services use injectEndpoints pattern
+- **Single Reducer**: Unified state management through baseApi reducer
+- **Shared Configuration**: Common settings (baseURL, headers, credentials)
+- **Tag-Based Invalidation**: Automatic cache updates on mutations
+- **Code Organization**: Separate API files (tasksApi, usersApi, tagsApi)
+- **Type Safety**: Full TypeScript support with DTO types
+
+### 7. Form Component Architecture
+- **BaseForm**: Reusable form layout with title and container
+- **FormAlerts**: Centralized success/error message display
+- **FormActions**: Shared action buttons (Submit, Clear, Cancel)
+- **useFormState Hook**: Custom hook for form state management
+- **Composition Pattern**: Forms compose smaller, focused components
+- **Code Organization**: Consistent structure across all forms
+- **Consistency**: Uniform behavior and appearance across all forms
+
+### 8. Validation Utilities
+- **validators.ts**: Centralized validation logic
+- **Reusable Validators**: isNotEmpty, hasMinLength, hasMaxLength, isValidEmail, isValidPhone
+- **Date Validators**: isNotPastDate, isWithinYears, isValidDate
+- **Factory Functions**: required(), minLength(), maxLength(), email(), phone()
+- **Composable Validators**: composeValidators() for combining multiple rules
+- **DRY Principle**: Shared validation logic across the application
+- **Type Safety**: Full TypeScript support with proper return types
+
+### 9. Entity Framework Configuration
 - **Database Context**: Centralized DbContext with DbSet properties for all entities
 - **Relationships**: 
   - One-to-Many: User to Tasks
@@ -648,14 +732,14 @@ TaskId | Title              | TagCount | TagNames
 - **Migrations**: Automatic database schema generation and updates
 - **Seeding**: Initial data population for testing and demonstration
 
-### 3. State Management (Redux Toolkit)
+### 10. State Management (Redux Toolkit)
 - **RTK Query**: Automatic API call caching and state management
 - **Normalized Cache**: Efficient data storage and updates
 - **Automatic Refetching**: Data updates propagate across the application
 - **Optimistic Updates**: Immediate UI feedback with rollback on error
 - **Tagged Cache Invalidation**: Automatic data refresh on mutations
 
-### 4. Validation Strategy
+### 11. Validation Strategy
 
 #### Frontend Validation (React)
 - **Real-time validation**: As users type
@@ -669,35 +753,35 @@ TaskId | Title              | TagCount | TagNames
 - **ModelState validation**: Automatic validation checking
 - **Comprehensive error messages**: Detailed feedback for debugging
 
-### 5. N:N Relationship Implementation
+### 12. N:N Relationship Implementation
 - **Junction Table**: TaskTags entity for Many-to-Many relationship
 - **Navigation Properties**: Seamless traversal between Tasks and Tags
 - **Cascade Behavior**: Proper handling of deletions
 - **Tag Selection**: Multi-select dropdown with chip display
 - **API DTOs**: TagIds array for efficient data transfer
 
-### 6. Responsive UI Design
+### 13. Responsive UI Design
 - **Material-UI Theme**: Consistent design system
 - **Breakpoints**: Responsive layouts for different screen sizes
 - **Mobile-First**: Works seamlessly on mobile devices
 - **Accessibility**: ARIA labels and keyboard navigation
 - **User Experience**: Loading states, success messages, error handling
 
-### 7. Error Handling
+### 14. Error Handling
 - **Try-Catch Blocks**: Comprehensive error catching
 - **Custom Error Messages**: User-friendly error descriptions
 - **API Error Responses**: Structured error objects
 - **Fallback UI**: Graceful degradation on errors
 - **Logging**: Console and server-side logging for debugging
 
-### 8. RESTful API Design
+### 15. RESTful API Design
 - **Resource-Based URLs**: Clear, predictable endpoint structure
 - **HTTP Verbs**: Proper use of GET, POST, PUT, DELETE
 - **Status Codes**: Correct HTTP status codes (200, 201, 400, 404, etc.)
 - **DTOs**: Separation of database entities and API contracts
 - **CORS Configuration**: Secure cross-origin access
 
-### 9. Windows Service with RabbitMQ Integration
+### 16. Windows Service with RabbitMQ Integration
 - **Windows Service**: .NET Core Worker Service that can run as a Windows Service
 - **Task Polling**: Pulls overdue tasks from API and inserts into RabbitMQ queue "Reminder"
 - **Queue Subscription**: Same service subscribes to queue and logs reminders
@@ -802,17 +886,24 @@ If ports 5000, 7000, or 5173 are in use:
 ## 📝 Development Notes
 
 ### Best Practices Implemented
-- ✅ Service Layer Pattern with Interface-Based Design
-- ✅ Separation of Concerns (Controllers, Services, Interfaces, Entities, DTOs)
-- ✅ Repository Pattern (via Entity Framework DbContext)
-- ✅ Dependency Injection
-- ✅ Async/Await for all I/O operations
-- ✅ Strong typing with TypeScript
-- ✅ Component-based architecture
-- ✅ Clean code principles
-- ✅ Comprehensive error handling
-- ✅ Input validation (client and server)
-- ✅ Responsive design patterns
+- ✅ **Base Controller Pattern** - Shared controller logic eliminates duplicate code
+- ✅ **Custom Exception Handling** - Type-safe, structured error management
+- ✅ **Base Service Pattern** - Centralized error handling and database operations
+- ✅ **Entity-DTO Mapping Layer** - Separation of concerns for data transformation
+- ✅ **Service Layer Pattern** with Interface-Based Design
+- ✅ **Separation of Concerns** (Controllers, Services, Interfaces, Entities, DTOs, Mappers)
+- ✅ **Repository Pattern** (via Entity Framework DbContext)
+- ✅ **Dependency Injection** throughout the application
+- ✅ **Async/Await** for all I/O operations
+- ✅ **Client API Architecture** - Centralized RTK Query configuration with injectEndpoints
+- ✅ **Form Component Composition** - Reusable form components for consistent UX
+- ✅ **Validation Utilities** - DRY principle for validation logic
+- ✅ **Strong typing** with TypeScript and DTOs
+- ✅ **Component-based architecture** with clear boundaries
+- ✅ **Clean code principles** - readable, maintainable, testable
+- ✅ **Comprehensive error handling** at all layers
+- ✅ **Input validation** (client and server)
+- ✅ **Responsive design patterns**
 
 ### Future Enhancements
 - Unit tests for API controllers
