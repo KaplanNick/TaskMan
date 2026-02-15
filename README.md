@@ -426,6 +426,7 @@ The service will:
 - This means the queue will often look empty in RabbitMQ UI because messages are processed right away.
 - The queue payload is JSON, while the consumer logs a formatted plain-text reminder line.
 - To see messages pile up in the queue, set `TaskReminder:EnableConsumer` to `false` and restart the service.
+- If you run the Windows Service and `dotnet run` at the same time, you have multiple consumers and RabbitMQ will split messages across them.
 
 **How to view messages in RabbitMQ UI:**
 1. Set `TaskReminder:EnableConsumer` to `false` in `TaskReminderService/appsettings.json`.
