@@ -240,7 +240,7 @@
 - **Comprehensive validation** on all inputs
 
 ### Frontend
-- **9 React components** (pages and reusable components)
+- **7 React components** (6 page components + 1 reusable component)
 - **3 API services** with RTK Query
 - **3 Validation modules**
 - **Redux store** with multiple slices

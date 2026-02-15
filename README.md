@@ -162,8 +162,8 @@ dotnet ef migrations add MigrationName
 
 ### Seed Data
 The application automatically seeds the database with:
-- **3 Users** - Sample users with complete information
-- **5 Tags** - Common task tags (Work, Personal, Urgent, Home, Health)
+- **5 Users** - Sample users with complete information
+- **10 Tags** - Common task tags (Urgent, Work, Personal, Shopping, Health, Finance, Education, Home, Travel, Project)
 - **10 Sample Tasks** - Pre-populated tasks with various priorities and tags
 
 ### Manual Database Creation (if needed)
@@ -271,7 +271,7 @@ dotnet run
 
 The API will be available at:
 - **HTTP:** http://localhost:5000
-- **HTTPS:** https://localhost:5001
+- **HTTPS:** https://localhost:7000
 
 ### Start Frontend Development Server
 ```bash
@@ -356,8 +356,7 @@ TaskMan/
 ├── client/                            # Frontend React Application
 │   ├── src/
 │   │   ├── components/               # Reusable components
-│   │   │   ├── CreateTaskForm.tsx
-│   │   │   └── Navbar.tsx
+│   │   │   └── Navbar.tsx            # Navigation bar component
 │   │   ├── pages/                    # Page components
 │   │   │   ├── Layout.tsx            # Main layout with routing
 │   │   │   ├── NewTaskForm.tsx       # Create task page
@@ -372,6 +371,8 @@ TaskMan/
 │   │   ├── store/                    # Redux store configuration
 │   │   │   ├── store.ts              # Store setup
 │   │   │   └── hooks.ts              # Typed Redux hooks
+│   │   ├── types/                    # TypeScript type definitions
+│   │   │   └── api.ts                # API types
 │   │   ├── validation/               # Form validation logic
 │   │   │   ├── taskValidation.ts
 │   │   │   ├── userValidation.ts
@@ -382,6 +383,14 @@ TaskMan/
 │   ├── package.json                  # Dependencies
 │   ├── tsconfig.json                 # TypeScript config
 │   └── vite.config.ts                # Vite configuration
+│
+├── TaskReminderService/              # Background Service for Task Reminders
+│   ├── Services/                     # Service implementations
+│   │   └── TaskRemainderService.cs   # RabbitMQ integration
+│   ├── Program.cs                    # Service entry point
+│   ├── Worker.cs                     # Background worker
+│   ├── appsettings.json             # Service configuration
+│   └── TaskReminderService.csproj   # Project file
 │
 └── README.md                          # This file
 ```
@@ -629,7 +638,7 @@ npm run dev
 ```
 
 ### Port Conflicts
-If ports 5000, 5001, or 5173 are in use:
+If ports 5000, 7000, or 5173 are in use:
 - **Backend**: Modify `Properties/launchSettings.json`
 - **Frontend**: Modify `vite.config.ts` or set `PORT=3000 npm run dev`
 
