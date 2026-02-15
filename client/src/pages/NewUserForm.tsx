@@ -3,14 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateUserMutation, useGetAllUsersQuery } from '../services/usersApi';
 import { validateUser, type UserValidationErrors } from '../validation/userValidation';
 import { getErrorMessage } from '../types/api';
-import {
-  TextField,
-  Button,
-  Box,
-  Typography,
-  Alert,
-  CircularProgress,
-} from '@mui/material';
+import { TextField } from '@mui/material';
+import { BaseForm } from '../components/BaseForm';
+import { FormAlerts } from '../components/FormAlerts';
+import { FormActions } from '../components/FormActions';
 
 export function NewUserForm() {
   const navigate = useNavigate();
@@ -56,67 +52,43 @@ export function NewUserForm() {
     setErrors({});
 
     try {
-      await createUser({
-        fullName,
-        email,
-        telephone,
-      }).unwrap();
-
-      // Reset form on success
+      await createUser({ fullName, email, telephone }).unwrap();
       setFullName('');
       setEmail('');
       setTelephone('');
-
-      // Navigate back to tasks
       navigate('/');
     } catch (err) {
       // Map error message to the correct field based on error content
       const errorMessage = getErrorMessage(err);
       const mappedErrors: any = {};
 
-      // Check which field caused the error based on message content
       if (errorMessage.toLowerCase().includes('email')) {
         mappedErrors.email = errorMessage;
       } else if (errorMessage.toLowerCase().includes('telephone')) {
         mappedErrors.telephone = errorMessage;
       } else {
-        // Generic error - show in full name field
         mappedErrors.fullName = errorMessage;
       }
 
-      setErrors(prev => ({
-        ...prev,
-        ...mappedErrors
-      }));
+      setErrors(prev => ({ ...prev, ...mappedErrors }));
     }
   };
 
+  const handleClear = () => {
+    setFullName('');
+    setEmail('');
+    setTelephone('');
+    setErrors({});
+  };
+
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-      <Box
-        component="form"
-        onSubmit={handleSubmit}
-        sx={{
-          maxWidth: { xs: '100%', sm: 400 },
-          width: '100%',
-          p: { xs: 2, sm: 3 },
-        }}
-      >
-        <Typography variant="h5" component="h1" gutterBottom>
-          Create New User
-        </Typography>
-
-      {isSuccess && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          User created successfully!
-        </Alert>
-      )}
-
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to create user: {getErrorMessage(error)}
-        </Alert>
-      )}
+    <BaseForm title="Create New User" onSubmit={handleSubmit} maxWidth={400}>
+      <FormAlerts
+        isSuccess={isSuccess}
+        isError={isError}
+        successMessage="User created successfully!"
+        errorMessage={`Failed to create user: ${getErrorMessage(error)}`}
+      />
 
       <TextField
         fullWidth
@@ -155,47 +127,13 @@ export function NewUserForm() {
         disabled={isLoading}
       />
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: 2,
-          mt: 3,
-          mb: 2,
-        }}
-      >
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={isLoading}
-          sx={{ flex: 1 }}
-          startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
-        >
-          {isLoading ? 'Creating...' : 'Create User'}
-        </Button>
-        <Button
-          type="button"
-          variant="outlined"
-          onClick={() => {
-            setFullName('');
-            setEmail('');
-            setTelephone('');
-            setErrors({});
-          }}
-          sx={{ flex: 1 }}
-        >
-          Clear
-        </Button>
-        <Button
-          type="button"
-          variant="text"
-          onClick={() => navigate('/')}
-          sx={{ flex: 1 }}
-        >
-          Cancel
-        </Button>
-      </Box>
-      </Box>
-    </Box>
+      <FormActions
+        isLoading={isLoading}
+        submitLabel="Create User"
+        loadingLabel="Creating..."
+        onClear={handleClear}
+        onCancel={() => navigate('/')}
+      />
+    </BaseForm>
   );
 }

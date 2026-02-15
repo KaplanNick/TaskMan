@@ -1,3 +1,15 @@
+import { 
+  validateField, 
+  required, 
+  minLength, 
+  maxLength, 
+  email, 
+  phone,
+  isValidDate,
+  isNotPastDate,
+  isWithinYears
+} from './validators';
+
 export interface TaskValidationErrors {
   title?: string;
   description?: string;
@@ -23,66 +35,67 @@ export const validateTask = (
 ): TaskValidationErrors => {
   const errors: TaskValidationErrors = {};
 
-  if (!title.trim()) {
-    errors.title = 'Title is required';
-  } else if (title.trim().length < 3) {
-    errors.title = 'Title must be at least 3 characters';
-  } else if (title.trim().length > 200) {
-    errors.title = 'Title cannot exceed 200 characters';
+  // Validate title
+  const titleError = validateField(
+    title,
+    required('Title'),
+    minLength(3),
+    maxLength(200)
+  );
+  if (titleError) {
+    errors.title = titleError;
   }
 
-  if (!description.trim()) {
-    errors.description = 'Description is required';
-  } else if (description.trim().length < 10) {
-    errors.description = 'Description must be at least 10 characters';
-  } else if (description.trim().length > 2000) {
-    errors.description = 'Description cannot exceed 2000 characters';
+  // Validate description
+  const descriptionError = validateField(
+    description,
+    required('Description'),
+    minLength(10),
+    maxLength(2000)
+  );
+  if (descriptionError) {
+    errors.description = descriptionError;
   }
 
+  // Validate due date
   if (!dueDate) {
     errors.dueDate = 'Due date is required';
-  } else {
-    // Parse as UTC date (HTML date input returns date strings like "2025-02-20")
-    const date = new Date(dueDate + 'T00:00:00Z');
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const maxDate = new Date();
-    maxDate.setUTCFullYear(maxDate.getUTCFullYear() + 10);
-    maxDate.setUTCHours(0, 0, 0, 0);
-    
-    if (isNaN(date.getTime())) {
-      errors.dueDate = 'Invalid date';
-    } else if (date < today) {
-      errors.dueDate = 'Due date cannot be in the past';
-    } else if (date > maxDate) {
-      errors.dueDate = 'Due date cannot be more than 10 years in the future';
-    }
+  } else if (!isValidDate(dueDate)) {
+    errors.dueDate = 'Invalid date';
+  } else if (!isNotPastDate(dueDate)) {
+    errors.dueDate = 'Due date cannot be in the past';
+  } else if (!isWithinYears(dueDate, 10)) {
+    errors.dueDate = 'Due date cannot be more than 10 years in the future';
   }
 
+  // Validate priority
   if (!priority || priority < 1 || priority > 3) {
     errors.priority = 'Priority is required';
   }
 
+  // Validate tags
   if (!tagIds || tagIds.length === 0) {
     errors.tags = 'At least one tag is required';
   } else if (tagIds.length > 10) {
     errors.tags = 'Cannot assign more than 10 tags';
   }
 
+  // Validate user selection or new user fields
   if (userId === '') {
     // If no user selected, validate new user fields
-    if (!newUserFullName.trim()) {
-      errors.newUserFullName = 'Full name is required';
+    const fullNameError = validateField(newUserFullName, required('Full name'));
+    if (fullNameError) {
+      errors.newUserFullName = fullNameError;
     }
-    if (!newUserEmail.trim()) {
-      errors.newUserEmail = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUserEmail)) {
-      errors.newUserEmail = 'Email is invalid';
+
+    const emailError = validateField(newUserEmail, required('Email'), email());
+    if (emailError) {
+      errors.newUserEmail = emailError;
     }
-    if (!newUserTelephone.trim()) {
-      errors.newUserTelephone = 'Telephone is required';
-    } else if (!/^\+?[1-9]\d{0,14}([\s\-]?\d+)*$/.test(newUserTelephone.replace(/[\s\-\(\)]/g, ''))) {
-      errors.newUserTelephone = 'Telephone is invalid';
+
+    const phoneError = validateField(newUserTelephone, required('Telephone'), phone());
+    if (phoneError) {
+      errors.newUserTelephone = phoneError;
     }
   }
 

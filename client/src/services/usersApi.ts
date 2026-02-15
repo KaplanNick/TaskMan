@@ -1,28 +1,7 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { baseApi } from "./baseApi";
+import type { UserDto, CreateUserDto, UpdateUserDto } from "../types/dtos";
 
-export interface UserDto {
-  id: number;
-  fullName: string;
-  email: string;
-  telephone: string;
-}
-
-export interface CreateUserDto {
-  fullName: string;
-  email: string;
-  telephone: string;
-}
-
-export interface UpdateUserDto {
-  fullName: string;
-  email: string;
-  telephone: string;
-}
-
-export const usersApi = createApi({
-  reducerPath: "usersApi",
-  baseQuery: fetchBaseQuery({ baseUrl: "http://localhost:5000/api" }),
-  tagTypes: ["User"],
+export const usersApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAllUsers: builder.query<UserDto[], void>({
       query: () => "/users",
@@ -31,7 +10,8 @@ export const usersApi = createApi({
 
     getUserById: builder.query<UserDto, number>({
       query: (id) => `/users/${id}`,
-      providesTags: (result, error, id) => [{ type: "User", id }],
+      // @ts-ignore - unused params required by RTK Query signature
+      providesTags: (_, __, id) => [{ type: "User", id }],
     }),
 
     createUser: builder.mutation<UserDto, CreateUserDto>({
@@ -49,7 +29,8 @@ export const usersApi = createApi({
         method: "PUT",
         body,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: "User", id }, "User"],
+      // @ts-ignore - unused params required by RTK Query signature
+      invalidatesTags: (_, __, { id }) => [{ type: "User", id }, "User"],
     }),
 
     deleteUser: builder.mutation<void, number>({

@@ -1,26 +1,34 @@
+import { validateField, required, email, phone } from './validators';
+
 export interface UserValidationErrors {
   fullName?: string;
   email?: string;
   telephone?: string;
 }
 
-export const validateUser = (fullName: string, email: string, telephone: string): UserValidationErrors => {
+export const validateUser = (
+  fullName: string, 
+  emailValue: string, 
+  telephone: string
+): UserValidationErrors => {
   const errors: UserValidationErrors = {};
 
-  if (!fullName.trim()) {
-    errors.fullName = 'Full name is required';
+  // Validate full name
+  const fullNameError = validateField(fullName, required('Full name'));
+  if (fullNameError) {
+    errors.fullName = fullNameError;
   }
 
-  if (!email.trim()) {
-    errors.email = 'Email is required';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = 'Email is invalid';
+  // Validate email
+  const emailError = validateField(emailValue, required('Email'), email());
+  if (emailError) {
+    errors.email = emailError;
   }
 
-  if (!telephone.trim()) {
-    errors.telephone = 'Telephone is required';
-  } else if (!/^\+?[1-9]\d{0,14}([\s\-]?\d+)*$/.test(telephone.replace(/[\s\-\(\)]/g, ''))) {
-    errors.telephone = 'Telephone is invalid';
+  // Validate telephone
+  const telephoneError = validateField(telephone, required('Telephone'), phone());
+  if (telephoneError) {
+    errors.telephone = telephoneError;
   }
 
   return errors;

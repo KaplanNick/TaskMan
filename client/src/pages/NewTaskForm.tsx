@@ -7,10 +7,6 @@ import { validateTask, type TaskValidationErrors } from '../validation/taskValid
 import { getErrorMessage } from '../types/api';
 import {
   TextField,
-  Button,
-  Box,
-  Typography,
-  Alert,
   FormControl,
   InputLabel,
   Select,
@@ -18,9 +14,13 @@ import {
   FormHelperText,
   Chip,
   OutlinedInput,
-  CircularProgress,
+  Box,
+  Typography,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
+import { BaseForm } from '../components/BaseForm';
+import { FormAlerts } from '../components/FormAlerts';
+import { FormActions } from '../components/FormActions';
 
 const ITEM_HEIGHT = 48;
 const ITEM_PADDING_TOP = 8;
@@ -56,7 +56,7 @@ export function NewTaskForm() {
     if (isSuccess) {
       const timer = setTimeout(() => {
         navigate('/');
-      }, 1500); // Give user 1.5 seconds to see success message
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [isSuccess, navigate]);
@@ -116,25 +116,18 @@ export function NewTaskForm() {
         }).unwrap();
         userId = newUser.id as number;
       } catch (err) {
-        // Show user creation error with proper feedback
-        // Map error message to the correct field based on error content
         const errorMessage = getErrorMessage(err);
         const mappedErrors: any = {};
 
-        // Check which field caused the error based on message content
         if (errorMessage.toLowerCase().includes('email')) {
           mappedErrors.newUserEmail = errorMessage;
         } else if (errorMessage.toLowerCase().includes('telephone')) {
           mappedErrors.newUserTelephone = errorMessage;
         } else {
-          // Generic error - show in full name field
           mappedErrors.newUserFullName = errorMessage;
         }
 
-        setErrors(prev => ({
-          ...prev,
-          ...mappedErrors
-        }));
+        setErrors(prev => ({ ...prev, ...mappedErrors }));
         return;
       }
     }
@@ -159,17 +152,13 @@ export function NewTaskForm() {
       setNewUserFullName('');
       setNewUserEmail('');
       setNewUserTelephone('');
-
-      // Navigate handled by useEffect
     } catch (err) {
       // Error handled by RTK Query
     }
   };
 
   const handleTagChange = (event: SelectChangeEvent<number[]>) => {
-    const {
-      target: { value },
-    } = event;
+    const { target: { value } } = event;
     setSelectedTags(typeof value === 'string' ? value.split(',').map(Number) : value);
   };
 
@@ -186,32 +175,16 @@ export function NewTaskForm() {
     setErrors({});
   };
 
+  const isLoading = isCreatingTask || isCreatingUser;
+
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-      <Box
-        component="form"
-        onSubmit={handleSubmit}
-        sx={{
-          maxWidth: { xs: '100%', sm: 600 },
-          width: '100%',
-          p: { xs: 2, sm: 3 },
-        }}
-      >
-        <Typography variant="h5" component="h1" gutterBottom>
-          Create New Task
-        </Typography>
-
-      {isSuccess && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          Task created successfully!
-        </Alert>
-      )}
-
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to create task: {getErrorMessage(error)}
-        </Alert>
-      )}
+    <BaseForm title="Create New Task" onSubmit={handleSubmit} maxWidth={600}>
+      <FormAlerts
+        isSuccess={isSuccess}
+        isError={isError}
+        successMessage="Task created successfully!"
+        errorMessage={`Failed to create task: ${getErrorMessage(error)}`}
+      />
 
       <TextField
         fullWidth
@@ -222,7 +195,7 @@ export function NewTaskForm() {
         helperText={errors.title || `${title.trim().length}/200 characters (min 3)`}
         margin="normal"
         required
-        disabled={isCreatingTask || isCreatingUser}
+        disabled={isLoading}
         slotProps={{ htmlInput: { maxLength: 200 } }}
       />
 
@@ -237,7 +210,7 @@ export function NewTaskForm() {
         multiline
         rows={3}
         required
-        disabled={isCreatingTask || isCreatingUser}
+        disabled={isLoading}
         slotProps={{ htmlInput: { maxLength: 2000 } }}
       />
 
@@ -251,10 +224,8 @@ export function NewTaskForm() {
         helperText={errors.dueDate}
         margin="normal"
         required
-        disabled={isCreatingTask || isCreatingUser}
-        InputLabelProps={{
-          shrink: true,
-        }}
+        disabled={isLoading}
+        InputLabelProps={{ shrink: true }}
       />
 
       <FormControl fullWidth margin="normal" error={!!errors.priority}>
@@ -263,7 +234,7 @@ export function NewTaskForm() {
           value={priority}
           label="Priority"
           onChange={(e) => setPriority(Number(e.target.value))}
-          disabled={isCreatingTask || isCreatingUser}
+          disabled={isLoading}
         >
           <MenuItem value={1}>Low</MenuItem>
           <MenuItem value={2}>Medium</MenuItem>
@@ -278,7 +249,7 @@ export function NewTaskForm() {
           value={selectedUserId}
           label="User"
           onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : '')}
-          disabled={isCreatingTask || isCreatingUser}
+          disabled={isLoading}
         >
           <MenuItem value="">
             <em>Select User</em>
@@ -304,7 +275,7 @@ export function NewTaskForm() {
         error={!!errors.newUserFullName}
         helperText={errors.newUserFullName}
         margin="normal"
-        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
+        disabled={selectedUserId !== '' || isLoading}
       />
 
       <TextField
@@ -315,7 +286,7 @@ export function NewTaskForm() {
         error={!!errors.newUserTelephone}
         helperText={errors.newUserTelephone}
         margin="normal"
-        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
+        disabled={selectedUserId !== '' || isLoading}
       />
 
       <TextField
@@ -327,7 +298,7 @@ export function NewTaskForm() {
         error={!!errors.newUserEmail}
         helperText={errors.newUserEmail}
         margin="normal"
-        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
+        disabled={selectedUserId !== '' || isLoading}
       />
 
       <FormControl fullWidth margin="normal" error={!!errors.tags}>
@@ -337,7 +308,7 @@ export function NewTaskForm() {
           value={selectedTags}
           onChange={handleTagChange}
           input={<OutlinedInput label="Tags" />}
-          disabled={isCreatingTask || isCreatingUser}
+          disabled={isLoading}
           renderValue={(selected) => (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {selected.map((tagId) => {
@@ -357,42 +328,13 @@ export function NewTaskForm() {
         {errors.tags && <FormHelperText>{errors.tags}</FormHelperText>}
       </FormControl>
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: 2,
-          mt: 3,
-          mb: 2,
-        }}
-      >
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={isCreatingTask || isCreatingUser}
-          sx={{ flex: 1 }}
-          startIcon={(isCreatingTask || isCreatingUser) ? <CircularProgress size={20} color="inherit" /> : null}
-        >
-          {isCreatingTask || isCreatingUser ? 'Saving...' : 'Save'}
-        </Button>
-        <Button
-          type="button"
-          variant="outlined"
-          onClick={handleClear}
-          sx={{ flex: 1 }}
-        >
-          Clear
-        </Button>
-        <Button
-          type="button"
-          variant="text"
-          onClick={() => navigate('/')}
-          sx={{ flex: 1 }}
-        >
-          Cancel
-        </Button>
-      </Box>
-      </Box>
-    </Box>
+      <FormActions
+        isLoading={isLoading}
+        submitLabel="Save"
+        loadingLabel="Saving..."
+        onClear={handleClear}
+        onCancel={() => navigate('/')}
+      />
+    </BaseForm>
   );
 }

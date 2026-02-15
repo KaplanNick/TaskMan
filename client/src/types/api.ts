@@ -1,6 +1,6 @@
 /**
  * API Error Response Types
- * Standardized error handling across the application
+ * Matches the backend BaseApiController error format
  */
 
 export interface ApiErrorResponse {
@@ -10,6 +10,13 @@ export interface ApiErrorResponse {
   };
   message?: string;
   status?: number;
+}
+
+/**
+ * Standard API error format from backend
+ */
+export interface ApiError {
+  message: string;
 }
 
 /**

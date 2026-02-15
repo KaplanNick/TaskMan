@@ -1,18 +1,7 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { baseApi } from "./baseApi";
+import type { TagDto, CreateTagDto, UpdateTagDto } from "../types/dtos";
 
-export interface TagDto {
-  id: number;
-  name: string;
-}
-
-export interface CreateTagDto {
-  name: string;
-}
-
-export const tagsApi = createApi({
-  reducerPath: "tagsApi",
-  baseQuery: fetchBaseQuery({ baseUrl: "http://localhost:5000/api" }),
-  tagTypes: ["Tag"],
+export const tagsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAllTags: builder.query<TagDto[], void>({
       query: () => "/tags",
@@ -21,7 +10,8 @@ export const tagsApi = createApi({
 
     getTagById: builder.query<TagDto, number>({
       query: (id) => `/tags/${id}`,
-      providesTags: (result, error, id) => [{ type: "Tag", id }],
+      // @ts-ignore - unused params required by RTK Query signature
+      providesTags: (_, __, id) => [{ type: "Tag", id }],
     }),
 
     createTag: builder.mutation<TagDto, CreateTagDto>({
@@ -33,13 +23,14 @@ export const tagsApi = createApi({
       invalidatesTags: ["Tag"],
     }),
 
-    updateTag: builder.mutation<TagDto, { id: number; body: CreateTagDto }>({
+    updateTag: builder.mutation<TagDto, { id: number; body: UpdateTagDto }>({
       query: ({ id, body }) => ({
         url: `/tags/${id}`,
         method: "PUT",
         body,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: "Tag", id }, "Tag"],
+      // @ts-ignore - unused params required by RTK Query signature
+      invalidatesTags: (_, __, { id }) => [{ type: "Tag", id }, "Tag"],
     }),
 
     deleteTag: builder.mutation<void, number>({
