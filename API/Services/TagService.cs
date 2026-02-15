@@ -2,6 +2,7 @@ using API.Data;
 using API.DTOs;
 using API.Entities;
 using API.Interfaces;
+using API.Mappers;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
@@ -17,7 +18,7 @@ public class TagService : BaseService, ITagService
         var tag = await Db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
         return tag is null
             ? ServiceResult<TagDto>.NotFound()
-            : ServiceResult<TagDto>.Ok(new TagDto { Id = tag.Id, Name = tag.Name });
+            : ServiceResult<TagDto>.Ok(TagMapper.ToDto(tag));
     }
 
     public async Task<ServiceResult<List<TagDto>>> GetAllAsync()
@@ -29,7 +30,7 @@ public class TagService : BaseService, ITagService
                 .OrderBy(t => t.Name)
                 .ToListAsync();
 
-            return tags.Select(t => new TagDto { Id = t.Id, Name = t.Name }).ToList();
+            return TagMapper.ToDtoList(tags);
         }, "Failed to retrieve tags");
     }
 
@@ -45,7 +46,7 @@ public class TagService : BaseService, ITagService
         {
             Db.Tags.Add(tag);
             await Db.SaveChangesAsync();
-            return new TagDto { Id = tag.Id, Name = tag.Name };
+            return TagMapper.ToDto(tag);
         }, "Failed to create tag");
     }
 
@@ -64,7 +65,7 @@ public class TagService : BaseService, ITagService
         return await ExecuteDatabaseOperationAsync(async () =>
         {
             await Db.SaveChangesAsync();
-            return new TagDto { Id = tag.Id, Name = tag.Name };
+            return TagMapper.ToDto(tag);
         }, "Failed to update tag");
     }
 

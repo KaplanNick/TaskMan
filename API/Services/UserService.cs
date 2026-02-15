@@ -2,6 +2,7 @@ using API.Data;
 using API.DTOs;
 using API.Entities;
 using API.Interfaces;
+using API.Mappers;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
@@ -17,7 +18,7 @@ public class UserService : BaseService, IUserService
         var user = await Db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         return user is null
             ? ServiceResult<UserDto>.NotFound()
-            : ServiceResult<UserDto>.Ok(MapToDto(user));
+            : ServiceResult<UserDto>.Ok(UserMapper.ToDto(user));
     }
 
     public async Task<ServiceResult<List<UserDto>>> GetAllAsync()
@@ -29,7 +30,7 @@ public class UserService : BaseService, IUserService
                 .OrderBy(u => u.FullName)
                 .ToListAsync();
 
-            return users.Select(MapToDto).ToList();
+            return UserMapper.ToDtoList(users);
         }, "Failed to retrieve users");
     }
 
@@ -39,18 +40,13 @@ public class UserService : BaseService, IUserService
         if (validationResult != null)
             return validationResult;
 
-        var user = new User
-        {
-            FullName = dto.FullName.Trim(),
-            Email = dto.Email.Trim().ToLowerInvariant(),
-            Telephone = dto.Telephone.Trim()
-        };
+        var user = UserMapper.ToEntity(dto);
 
         return await ExecuteDatabaseOperationAsync(async () =>
         {
             Db.Users.Add(user);
             await Db.SaveChangesAsync();
-            return MapToDto(user);
+            return UserMapper.ToDto(user);
         }, "Failed to create user");
     }
 
@@ -64,14 +60,12 @@ public class UserService : BaseService, IUserService
         if (validationResult != null)
             return validationResult;
 
-        user.FullName = dto.FullName.Trim();
-        user.Email = dto.Email.Trim().ToLowerInvariant();
-        user.Telephone = dto.Telephone.Trim();
+        UserMapper.UpdateEntity(user, dto);
 
         return await ExecuteDatabaseOperationAsync(async () =>
         {
             await Db.SaveChangesAsync();
-            return MapToDto(user);
+            return UserMapper.ToDto(user);
         }, "Failed to update user");
     }
 
@@ -131,13 +125,4 @@ public class UserService : BaseService, IUserService
 
         return null;
     }
-
-    private static UserDto MapToDto(User user) =>
-        new()
-        {
-            Id = user.Id,
-            FullName = user.FullName,
-            Email = user.Email,
-            Telephone = user.Telephone
-        };
 }

@@ -2,6 +2,7 @@ using API.Data;
 using API.DTOs;
 using API.Entities;
 using API.Interfaces;
+using API.Mappers;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
@@ -28,17 +29,7 @@ public class TaskService : BaseService, ITaskService
 
         var tags = await GetTagsByIdsAsync(dto.TagIds);
 
-        var task = new API.Entities.Task
-        {
-            Title = dto.Title.Trim(),
-            Description = dto.Description.Trim(),
-            DueDate = dto.DueDate,
-            Priority = (TaskPriority)dto.Priority,
-            UserId = user.Id
-        };
-
-        foreach (var tag in tags)
-            task.TaskTags.Add(new TaskTag { TagId = tag.Id });
+        var task = TaskMapper.ToEntity(dto, user.Id, tags);
 
         return await ExecuteDatabaseOperationAsync(async () =>
         {
@@ -51,7 +42,7 @@ public class TaskService : BaseService, ITaskService
                 .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
                 .FirstAsync(t => t.Id == task.Id);
 
-            return MapToDto(created);
+            return TaskMapper.ToDto(created);
         }, "Failed to create task");
     }
 
@@ -65,7 +56,7 @@ public class TaskService : BaseService, ITaskService
 
         return task is null
             ? ServiceResult<TaskDto>.NotFound()
-            : ServiceResult<TaskDto>.Ok(MapToDto(task));
+            : ServiceResult<TaskDto>.Ok(TaskMapper.ToDto(task));
     }
 
     public async Task<ServiceResult<List<TaskDto>>> GetAllAsync()
@@ -80,7 +71,7 @@ public class TaskService : BaseService, ITaskService
                 .Take(200)
                 .ToListAsync();
 
-            return tasks.Select(MapToDto).ToList();
+            return TaskMapper.ToDtoList(tasks);
         }, "Failed to retrieve tasks");
     }
 
@@ -107,14 +98,7 @@ public class TaskService : BaseService, ITaskService
         if (!userExists)
             return ServiceResult<TaskDto>.Fail(ServiceErrorType.Validation, "Assigned user no longer exists");
 
-        task.Title = dto.Title.Trim();
-        task.Description = dto.Description.Trim();
-        task.DueDate = dto.DueDate;
-        task.Priority = (TaskPriority)dto.Priority;
-
-        task.TaskTags.Clear();
-        foreach (var tag in tags)
-            task.TaskTags.Add(new TaskTag { TagId = tag.Id });
+        TaskMapper.UpdateEntity(task, dto, tags);
 
         return await ExecuteDatabaseOperationAsync(async () =>
         {
@@ -126,7 +110,7 @@ public class TaskService : BaseService, ITaskService
                 .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
                 .FirstAsync(t => t.Id == id);
 
-            return MapToDto(updated);
+            return TaskMapper.ToDto(updated);
         }, "Failed to update task");
     }
 
@@ -201,19 +185,4 @@ public class TaskService : BaseService, ITaskService
             .Where(t => distinctIds.Contains(t.Id))
             .ToListAsync();
     }
-
-    private static TaskDto MapToDto(API.Entities.Task task) =>
-        new()
-        {
-            Id = task.Id,
-            Title = task.Title,
-            Description = task.Description,
-            DueDate = task.DueDate,
-            Priority = (int)task.Priority,
-            UserId = task.UserId,
-            Tags = task.TaskTags
-                .Select(tt => new TagDto { Id = tt.Tag.Id, Name = tt.Tag.Name })
-                .OrderBy(t => t.Name)
-                .ToList()
-        };
 }
