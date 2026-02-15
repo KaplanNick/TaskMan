@@ -20,20 +20,27 @@ public class UsersController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var users = await _db.Users
-            .AsNoTracking()
-            .OrderBy(u => u.FullName)
-            .ToListAsync();
-        
-        var userDtos = users.Select(MapToDto).ToList();
-        return Ok(userDtos);
+        try
+        {
+            var users = await _db.Users
+                .AsNoTracking()
+                .OrderBy(u => u.FullName)
+                .ToListAsync();
+            
+            var userDtos = users.Select(MapToDto).ToList();
+            return Ok(userDtos);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "Failed to retrieve users" });
+        }
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
         if (id <= 0)
-            return BadRequest("Invalid user ID.");
+            return BadRequest(new { message = "Invalid user ID." });
 
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
@@ -46,11 +53,14 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
+        }
 
         var validationError = await ValidateUser(dto.Email, dto.Telephone, null);
         if (validationError != null)
-            return BadRequest(validationError);
+            return BadRequest(new { message = validationError });
 
         var user = new User 
         { 
@@ -59,20 +69,29 @@ public class UsersController : ControllerBase
             Telephone = dto.Telephone.Trim()
         };
 
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = user.Id }, MapToDto(user));
+        try
+        {
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetById), new { id = user.Id }, MapToDto(user));
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to create user due to database error" });
+        }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto dto)
     {
         if (id <= 0)
-            return BadRequest("Invalid user ID.");
+            return BadRequest(new { message = "Invalid user ID." });
 
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
+        }
 
         var user = await _db.Users.FindAsync(id);
         if (user is null)
@@ -80,22 +99,28 @@ public class UsersController : ControllerBase
 
         var validationError = await ValidateUser(dto.Email, dto.Telephone, id);
         if (validationError != null)
-            return BadRequest(validationError);
+            return BadRequest(new { message = validationError });
 
         user.FullName = dto.FullName.Trim();
         user.Email = dto.Email.Trim().ToLowerInvariant();
         user.Telephone = dto.Telephone.Trim();
 
-        await _db.SaveChangesAsync();
-
-        return Ok(MapToDto(user));
+        try
+        {
+            await _db.SaveChangesAsync();
+            return Ok(MapToDto(user));
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to update user due to database error" });
+        }
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
         if (id <= 0)
-            return BadRequest("Invalid user ID.");
+            return BadRequest(new { message = "Invalid user ID." });
 
         var user = await _db.Users
             .Include(u => u.Tasks)
@@ -106,12 +131,18 @@ public class UsersController : ControllerBase
 
         // Check if user has tasks
         if (user.Tasks.Any())
-            return BadRequest($"Cannot delete user '{user.FullName}' because they have {user.Tasks.Count} assigned task(s).");
+            return BadRequest(new { message = $"Cannot delete user '{user.FullName}' because they have {user.Tasks.Count} assigned task(s)." });
 
-        _db.Users.Remove(user);
-        await _db.SaveChangesAsync();
-
-        return NoContent();
+        try
+        {
+            _db.Users.Remove(user);
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to delete user due to database error" });
+        }
     }
 
     private async Task<string?> ValidateUser(string email, string telephone, int? excludeId)
@@ -126,7 +157,8 @@ public class UsersController : ControllerBase
         var trimmedTelephone = telephone.Trim();
 
         // Check for duplicate email (case-insensitive)
-        var emailQuery = _db.Users.Where(u => u.Email.ToLower() == trimmedEmail);
+        // Email is already stored lowercase in DB, so direct comparison is safe
+        var emailQuery = _db.Users.Where(u => u.Email == trimmedEmail);
         if (excludeId.HasValue)
             emailQuery = emailQuery.Where(u => u.Id != excludeId.Value);
 

@@ -19,22 +19,25 @@ public class TasksController : ControllerBase
     {
         // Model validation
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
+        }
 
         // Custom validations
         var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
         if (validationError != null)
-            return BadRequest(validationError);
+            return BadRequest(new { message = validationError });
 
         // Validate user exists
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == dto.UserId);
         if (user is null)
-            return BadRequest("User not found.");
+            return BadRequest(new { message = "User not found." });
 
         // Validate tag IDs
         var tagValidationError = await ValidateTagIds(dto.TagIds);
         if (tagValidationError != null)
-            return BadRequest(tagValidationError);
+            return BadRequest(new { message = tagValidationError });
 
         // Get tags
         var tags = await GetTagsByIdsAsync(dto.TagIds);
@@ -51,24 +54,31 @@ public class TasksController : ControllerBase
         foreach (var tag in tags)
             task.TaskTags.Add(new TaskTag { TagId = tag.Id });
 
-        _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        try
+        {
+            _db.Tasks.Add(task);
+            await _db.SaveChangesAsync();
 
-        // Load full object for response
-        var created = await _db.Tasks
-            .AsNoTracking()
-            .Include(t => t.User)
-            .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
-            .FirstAsync(t => t.Id == task.Id);
+            // Load full object for response
+            var created = await _db.Tasks
+                .AsNoTracking()
+                .Include(t => t.User)
+                .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
+                .FirstAsync(t => t.Id == task.Id);
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to create task due to database error" });
+        }
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
         if (id <= 0)
-            return BadRequest("Invalid task ID.");
+            return BadRequest(new { message = "Invalid task ID." });
 
         var task = await _db.Tasks
             .AsNoTracking()
@@ -82,31 +92,41 @@ public class TasksController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var tasks = await _db.Tasks
-            .AsNoTracking()
-            .Include(t => t.User)
-            .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
-            .OrderByDescending(t => t.Id)
-            .Take(200)
-            .ToListAsync();
+        try
+        {
+            var tasks = await _db.Tasks
+                .AsNoTracking()
+                .Include(t => t.User)
+                .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
+                .OrderByDescending(t => t.Id)
+                .Take(200)
+                .ToListAsync();
 
-        return Ok(tasks.Select(MapToDto));
+            return Ok(tasks.Select(MapToDto));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "Failed to retrieve tasks" });
+        }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateTaskDto dto)
     {
         if (id <= 0)
-            return BadRequest("Invalid task ID.");
+            return BadRequest(new { message = "Invalid task ID." });
 
         // Model validation
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
+        }
 
         // Custom validations
         var validationError = ValidateTaskDto(dto.Title, dto.Description, dto.DueDate);
         if (validationError != null)
-            return BadRequest(validationError);
+            return BadRequest(new { message = validationError });
 
         var task = await _db.Tasks
             .Include(t => t.TaskTags)
@@ -118,10 +138,15 @@ public class TasksController : ControllerBase
         // Validate tag IDs
         var tagValidationError = await ValidateTagIds(dto.TagIds);
         if (tagValidationError != null)
-            return BadRequest(tagValidationError);
+            return BadRequest(new { message = tagValidationError });
 
         // Get tags
         var tags = await GetTagsByIdsAsync(dto.TagIds);
+
+        // Verify userId still exists
+        var userExists = await _db.Users.AnyAsync(u => u.Id == task.UserId);
+        if (!userExists)
+            return BadRequest(new { message = "Assigned user no longer exists" });
 
         task.Title = dto.Title.Trim();
         task.Description = dto.Description.Trim();
@@ -132,31 +157,44 @@ public class TasksController : ControllerBase
         foreach (var tag in tags)
             task.TaskTags.Add(new TaskTag { TagId = tag.Id });
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
 
-        var updated = await _db.Tasks
-            .AsNoTracking()
-            .Include(t => t.User)
-            .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
-            .FirstAsync(t => t.Id == id);
+            var updated = await _db.Tasks
+                .AsNoTracking()
+                .Include(t => t.User)
+                .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
+                .FirstAsync(t => t.Id == id);
 
-        return Ok(MapToDto(updated));
+            return Ok(MapToDto(updated));
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to update task due to database error" });
+        }
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
         if (id <= 0)
-            return BadRequest("Invalid task ID.");
+            return BadRequest(new { message = "Invalid task ID." });
 
         var task = await _db.Tasks.FindAsync(id);
         if (task is null)
             return NotFound();
 
-        _db.Tasks.Remove(task);
-        await _db.SaveChangesAsync();
-
-        return NoContent();
+        try
+        {
+            _db.Tasks.Remove(task);
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(500, new { message = "Failed to delete task due to database error" });
+        }
     }
 
     private static string? ValidateTaskDto(string title, string description, DateTime dueDate)

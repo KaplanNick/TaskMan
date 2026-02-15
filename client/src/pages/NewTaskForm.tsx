@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateTaskMutation } from '../services/tasksApi';
 import { useGetAllUsersQuery, useCreateUserMutation } from '../services/usersApi';
 import { useGetAllTagsQuery } from '../services/tagsApi';
 import { validateTask, type TaskValidationErrors } from '../validation/taskValidation';
+import { getErrorMessage } from '../types/api';
 import {
   TextField,
   Button,
@@ -17,6 +18,7 @@ import {
   FormHelperText,
   Chip,
   OutlinedInput,
+  CircularProgress,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 
@@ -49,6 +51,16 @@ export function NewTaskForm() {
   const { data: users } = useGetAllUsersQuery();
   const { data: tags } = useGetAllTagsQuery();
 
+  // Navigate after showing success message
+  useEffect(() => {
+    if (isSuccess) {
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 1500); // Give user 1.5 seconds to see success message
+      return () => clearTimeout(timer);
+    }
+  }, [isSuccess, navigate]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -73,6 +85,28 @@ export function NewTaskForm() {
     let userId = selectedUserId;
 
     if (userId === '') {
+      // Check for duplicate email or telephone before creating user
+      const duplicateErrors: any = {};
+      
+      const emailExists = users?.some(
+        user => user.email.toLowerCase() === newUserEmail.toLowerCase()
+      );
+      if (emailExists) {
+        duplicateErrors.newUserEmail = `A user with the email '${newUserEmail}' already exists.`;
+      }
+
+      const telephoneExists = users?.some(
+        user => user.telephone === newUserTelephone
+      );
+      if (telephoneExists) {
+        duplicateErrors.newUserTelephone = `A user with the telephone '${newUserTelephone}' already exists.`;
+      }
+
+      if (Object.keys(duplicateErrors).length > 0) {
+        setErrors(duplicateErrors);
+        return;
+      }
+
       // Create new user first
       try {
         const newUser = await createUser({
@@ -80,9 +114,28 @@ export function NewTaskForm() {
           email: newUserEmail,
           telephone: newUserTelephone,
         }).unwrap();
-        userId = newUser.id;
+        userId = newUser.id as number;
       } catch (err) {
-        return; // Error handled by RTK Query
+        // Show user creation error with proper feedback
+        // Map error message to the correct field based on error content
+        const errorMessage = getErrorMessage(err);
+        const mappedErrors: any = {};
+
+        // Check which field caused the error based on message content
+        if (errorMessage.toLowerCase().includes('email')) {
+          mappedErrors.newUserEmail = errorMessage;
+        } else if (errorMessage.toLowerCase().includes('telephone')) {
+          mappedErrors.newUserTelephone = errorMessage;
+        } else {
+          // Generic error - show in full name field
+          mappedErrors.newUserFullName = errorMessage;
+        }
+
+        setErrors(prev => ({
+          ...prev,
+          ...mappedErrors
+        }));
+        return;
       }
     }
 
@@ -107,8 +160,7 @@ export function NewTaskForm() {
       setNewUserEmail('');
       setNewUserTelephone('');
 
-      // Navigate back to tasks
-      navigate('/');
+      // Navigate handled by useEffect
     } catch (err) {
       // Error handled by RTK Query
     }
@@ -157,7 +209,7 @@ export function NewTaskForm() {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to create task: {(error as any)?.data?.message || (error as any)?.message || 'Unknown error'}
+          Failed to create task: {getErrorMessage(error)}
         </Alert>
       )}
 
@@ -170,7 +222,8 @@ export function NewTaskForm() {
         helperText={errors.title || `${title.trim().length}/200 characters (min 3)`}
         margin="normal"
         required
-        inputProps={{ maxLength: 200 }}
+        disabled={isCreatingTask || isCreatingUser}
+        slotProps={{ htmlInput: { maxLength: 200 } }}
       />
 
       <TextField
@@ -184,7 +237,8 @@ export function NewTaskForm() {
         multiline
         rows={3}
         required
-        inputProps={{ maxLength: 2000 }}
+        disabled={isCreatingTask || isCreatingUser}
+        slotProps={{ htmlInput: { maxLength: 2000 } }}
       />
 
       <TextField
@@ -197,6 +251,7 @@ export function NewTaskForm() {
         helperText={errors.dueDate}
         margin="normal"
         required
+        disabled={isCreatingTask || isCreatingUser}
         InputLabelProps={{
           shrink: true,
         }}
@@ -208,6 +263,7 @@ export function NewTaskForm() {
           value={priority}
           label="Priority"
           onChange={(e) => setPriority(Number(e.target.value))}
+          disabled={isCreatingTask || isCreatingUser}
         >
           <MenuItem value={1}>Low</MenuItem>
           <MenuItem value={2}>Medium</MenuItem>
@@ -222,6 +278,7 @@ export function NewTaskForm() {
           value={selectedUserId}
           label="User"
           onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : '')}
+          disabled={isCreatingTask || isCreatingUser}
         >
           <MenuItem value="">
             <em>Select User</em>
@@ -247,7 +304,7 @@ export function NewTaskForm() {
         error={!!errors.newUserFullName}
         helperText={errors.newUserFullName}
         margin="normal"
-        disabled={selectedUserId !== ''}
+        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
       />
 
       <TextField
@@ -258,7 +315,7 @@ export function NewTaskForm() {
         error={!!errors.newUserTelephone}
         helperText={errors.newUserTelephone}
         margin="normal"
-        disabled={selectedUserId !== ''}
+        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
       />
 
       <TextField
@@ -270,7 +327,7 @@ export function NewTaskForm() {
         error={!!errors.newUserEmail}
         helperText={errors.newUserEmail}
         margin="normal"
-        disabled={selectedUserId !== ''}
+        disabled={selectedUserId !== '' || isCreatingTask || isCreatingUser}
       />
 
       <FormControl fullWidth margin="normal" error={!!errors.tags}>
@@ -280,6 +337,7 @@ export function NewTaskForm() {
           value={selectedTags}
           onChange={handleTagChange}
           input={<OutlinedInput label="Tags" />}
+          disabled={isCreatingTask || isCreatingUser}
           renderValue={(selected) => (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {selected.map((tagId) => {
@@ -313,6 +371,7 @@ export function NewTaskForm() {
           variant="contained"
           disabled={isCreatingTask || isCreatingUser}
           sx={{ flex: 1 }}
+          startIcon={(isCreatingTask || isCreatingUser) ? <CircularProgress size={20} color="inherit" /> : null}
         >
           {isCreatingTask || isCreatingUser ? 'Saving...' : 'Save'}
         </Button>

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUpdateTaskMutation, useGetTaskByIdQuery } from '../services/tasksApi';
 import { useGetAllTagsQuery } from '../services/tagsApi';
 import { validateTask, type TaskValidationErrors } from '../validation/taskValidation';
+import { getErrorMessage } from '../types/api';
 import {
   TextField,
   Button,
@@ -42,6 +43,13 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [errors, setErrors] = useState<TaskValidationErrors>({});
 
+  // Keep callback ref stable to avoid useEffect dependency issues
+  const onSuccessRef = useRef(onSuccess);
+  
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
   const [updateTask, { isLoading, isSuccess, isError, error }] = useUpdateTaskMutation();
   const { data: task, isLoading: isLoadingTask } = useGetTaskByIdQuery(taskId);
   const { data: tags } = useGetAllTagsQuery();
@@ -58,21 +66,28 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
   }, [task]);
 
   // Call onSuccess when update succeeds
+  // Use only isSuccess in dependency array - callback is accessed via ref
   useEffect(() => {
-    if (isSuccess && onSuccess) {
-      onSuccess();
+    if (isSuccess && onSuccessRef.current) {
+      onSuccessRef.current();
     }
-  }, [isSuccess, onSuccess]);
+  }, [isSuccess]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Task is guaranteed to exist at this point due to guard checks
+    if (!task) {
+      setErrors({ title: 'Task data not loaded' });
+      return;
+    }
 
     const validationErrors = validateTask(
       title,
       description,
       dueDate,
       priority,
-      task?.userId || 0, // Use existing userId
+      task.userId, // Use existing userId - task guaranteed to exist
       selectedTags,
       '', // No new user
       '',
@@ -141,7 +156,7 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to update task: {(error as any)?.data?.message || (error as any)?.message || 'Unknown error'}
+          Failed to update task: {getErrorMessage(error)}
         </Alert>
       )}
 
@@ -154,7 +169,8 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
         helperText={errors.title || `${title.trim().length}/200 characters (min 3)`}
         margin="normal"
         required
-        inputProps={{ maxLength: 200 }}
+        disabled={isLoading}
+        slotProps={{ htmlInput: { maxLength: 200 } }}
       />
 
       <TextField
@@ -168,7 +184,8 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
         multiline
         rows={3}
         required
-        inputProps={{ maxLength: 2000 }}
+        disabled={isLoading}
+        slotProps={{ htmlInput: { maxLength: 2000 } }}
       />
 
       <TextField
@@ -181,6 +198,7 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
         helperText={errors.dueDate}
         margin="normal"
         required
+        disabled={isLoading}
         InputLabelProps={{
           shrink: true,
         }}
@@ -192,6 +210,7 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
           value={priority}
           label="Priority"
           onChange={(e) => setPriority(Number(e.target.value))}
+          disabled={isLoading}
         >
           <MenuItem value={1}>Low</MenuItem>
           <MenuItem value={2}>Medium</MenuItem>
@@ -207,6 +226,7 @@ export function EditTaskForm({ taskId, onSuccess }: EditTaskFormProps) {
           value={selectedTags}
           onChange={handleTagChange}
           input={<OutlinedInput label="Tags" />}
+          disabled={isLoading}
           renderValue={(selected) => (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {selected.map((tagId) => {

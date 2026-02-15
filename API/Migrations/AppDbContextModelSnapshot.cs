@@ -40,7 +40,7 @@ namespace API.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Tags");
+                    b.ToTable("Tags", (string)null);
                 });
 
             modelBuilder.Entity("API.Entities.Task", b =>
@@ -74,7 +74,7 @@ namespace API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Tasks");
+                    b.ToTable("Tasks", (string)null);
                 });
 
             modelBuilder.Entity("API.Entities.TaskTag", b =>
@@ -89,7 +89,7 @@ namespace API.Migrations
 
                     b.HasIndex("TagId");
 
-                    b.ToTable("TaskTags");
+                    b.ToTable("TaskTags", (string)null);
                 });
 
             modelBuilder.Entity("API.Entities.User", b =>
@@ -123,7 +123,7 @@ namespace API.Migrations
                     b.HasIndex("Telephone")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("API.Entities.Task", b =>

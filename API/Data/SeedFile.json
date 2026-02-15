@@ -57,5 +57,87 @@
     {
       "name": "Project"
     }
+  ],
+  "tasks": [
+    {
+      "title": "Fix critical bug in production",
+      "description": "This is a critical bug that needs to be fixed immediately. The system is logging users out after 5 minutes which is causing major issues with user experience.",
+      "dueDateDaysOffset": -5,
+      "priority": 3,
+      "userId": 1,
+      "tagIds": [1, 2, 7]
+    },
+    {
+      "title": "Complete project proposal",
+      "description": "Finalize and submit the Q1 project proposal including timeline, budget, and resource allocation. Client presentation is scheduled for next week.",
+      "dueDateDaysOffset": -3,
+      "priority": 3,
+      "userId": 2,
+      "tagIds": [2, 7, 10]
+    },
+    {
+      "title": "Review code pull requests",
+      "description": "Review and approve pending code pull requests from the development team. Check for code quality, testing coverage, and adherence to standards.",
+      "dueDateDaysOffset": -1,
+      "priority": 2,
+      "userId": 3,
+      "tagIds": [2]
+    },
+    {
+      "title": "Prepare monthly budget report",
+      "description": "Compile and analyze all expenses for February. Create summary report with projections for Q1 spending.",
+      "dueDateDaysOffset": 1,
+      "priority": 2,
+      "userId": 4,
+      "tagIds": [2, 6]
+    },
+    {
+      "title": "Schedule team meeting",
+      "description": "Organize and schedule monthly team sync meeting. Prepare agenda covering project updates, blockers, and upcoming deadlines.",
+      "dueDateDaysOffset": 2,
+      "priority": 1,
+      "userId": 1,
+      "tagIds": [2]
+    },
+    {
+      "title": "Update documentation",
+      "description": "Update API documentation with new endpoints and parameters added in the latest release. Include examples and error codes.",
+      "dueDateDaysOffset": 5,
+      "priority": 2,
+      "userId": 3,
+      "tagIds": [2, 7]
+    },
+    {
+      "title": "Annual health checkup",
+      "description": "Schedule and complete annual health checkup at the clinic. Don't forget to bring insurance card and previous medical records.",
+      "dueDateDaysOffset": 28,
+      "priority": 2,
+      "userId": 5,
+      "tagIds": [3, 5]
+    },
+    {
+      "title": "Plan vacation",
+      "description": "Book flights and hotel for summer vacation. Look into travel insurance and create itinerary for the trip.",
+      "dueDateDaysOffset": 45,
+      "priority": 1,
+      "userId": 2,
+      "tagIds": [3, 9]
+    },
+    {
+      "title": "Home renovation project",
+      "description": "Get quotes from contractors for kitchen renovation. Review design plans and finalize budget before contract signing.",
+      "dueDateDaysOffset": 107,
+      "priority": 1,
+      "userId": 4,
+      "tagIds": [8]
+    },
+    {
+      "title": "Q2 planning and strategy",
+      "description": "Develop Q2 strategic plan including product roadmap, marketing initiatives, and team goals. Align with company objectives.",
+      "dueDateDaysOffset": 75,
+      "priority": 2,
+      "userId": 1,
+      "tagIds": [2, 10]
+    }
   ]
 }

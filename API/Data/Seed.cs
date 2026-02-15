@@ -37,9 +37,10 @@ public static class Seed
         }
 
         // Seed Users
+        var users = new List<User>();
         if (seedData.Users != null && seedData.Users.Count > 0)
         {
-            var users = seedData.Users.Select(u => new User
+            users = seedData.Users.Select(u => new User
             {
                 FullName = u.FullName,
                 Email = u.Email.ToLowerInvariant(),
@@ -51,9 +52,10 @@ public static class Seed
         }
 
         // Seed Tags
+        var tags = new List<Tag>();
         if (seedData.Tags != null && seedData.Tags.Count > 0)
         {
-            var tags = seedData.Tags.Select(t => new Tag
+            tags = seedData.Tags.Select(t => new Tag
             {
                 Name = t.Name
             }).ToList();
@@ -63,7 +65,44 @@ public static class Seed
         }
 
         await context.SaveChangesAsync();
-        Console.WriteLine("Seed data successfully added to database.");
+
+        // Seed Tasks (after users and tags are saved so we have IDs)
+        if (seedData.Tasks != null && seedData.Tasks.Count > 0)
+        {
+            var tasks = new List<API.Entities.Task>();
+            
+            foreach (var taskData in seedData.Tasks)
+            {
+                // Calculate due date based on offset from today
+                var dueDate = DateTime.UtcNow.AddDays(taskData.DueDateDaysOffset);
+                
+                var task = new API.Entities.Task
+                {
+                    Title = taskData.Title,
+                    Description = taskData.Description,
+                    DueDate = dueDate,
+                    Priority = (TaskPriority)taskData.Priority,
+                    UserId = taskData.UserId
+                };
+
+                // Add tags
+                if (taskData.TagIds != null)
+                {
+                    foreach (var tagId in taskData.TagIds)
+                    {
+                        task.TaskTags.Add(new TaskTag { TagId = tagId });
+                    }
+                }
+
+                tasks.Add(task);
+            }
+
+            await context.Tasks.AddRangeAsync(tasks);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"Seeding {tasks.Count} tasks...");
+        }
+
+        Console.WriteLine("✓ Seed data successfully added to database.");
     }
 }
 
@@ -72,6 +111,7 @@ public class SeedData
 {
     public List<SeedUser> Users { get; set; } = new();
     public List<SeedTag> Tags { get; set; } = new();
+    public List<SeedTask> Tasks { get; set; } = new();
 }
 
 public class SeedUser
@@ -84,4 +124,14 @@ public class SeedUser
 public class SeedTag
 {
     public string Name { get; set; } = null!;
+}
+
+public class SeedTask
+{
+    public string Title { get; set; } = null!;
+    public string Description { get; set; } = null!;
+    public int DueDateDaysOffset { get; set; }
+    public int Priority { get; set; }
+    public int UserId { get; set; }
+    public List<int> TagIds { get; set; } = new();
 }

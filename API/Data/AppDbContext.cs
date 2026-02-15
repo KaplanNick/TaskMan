@@ -20,6 +20,9 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(2000).IsRequired();
             b.Property(x => x.DueDate).IsRequired();
             b.Property(x => x.Priority).IsRequired();
+            
+            // Add index on UserId for better join performance
+            b.HasIndex(x => x.UserId);
         });
 
         modelBuilder.Entity<User>(b =>

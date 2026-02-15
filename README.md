@@ -9,6 +9,7 @@ A full-stack web application for managing user tasks with a .NET Core backend, R
 - [Prerequisites](#prerequisites)
 - [Installation & Setup](#installation--setup)
 - [Database Setup](#database-setup)
+- [RabbitMQ Setup](#rabbitmq-setup-optional---required-for-task-reminder-service)
 - [Running the Application](#running-the-application)
 - [Project Structure](#project-structure)
 - [API Endpoints](#api-endpoints)
@@ -69,7 +70,6 @@ Each task contains:
 - **.NET Core 10.0** - Web API framework
 - **Entity Framework Core 10.0.3** - ORM for database operations
 - **SQL Server** - Relational database
-- **Swagger** - API documentation and testing
 
 ### Frontend
 - **React 19.2.0** - UI framework
@@ -91,6 +91,8 @@ Before you begin, ensure you have the following installed:
 - **SQL Server 2019 or later** - [Download SQL Server Express](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)
   - Or SQL Server LocalDB (included with Visual Studio)
 - **Git** - [Download](https://git-scm.com/)
+- **RabbitMQ 3.12 or later** (Optional, required for Task Reminder Service) - [Download](https://www.rabbitmq.com/download.html)
+  - Can be installed via **Chocolatey** on Windows (see [RabbitMQ Setup](#rabbitmq-setup) section)
 
 ### Verify Installation
 ```bash
@@ -179,6 +181,86 @@ cd API
 dotnet ef database update
 ```
 
+## 🐰 RabbitMQ Setup (Optional - Required for Task Reminder Service)
+
+### Install RabbitMQ via Chocolatey
+
+If you have **Chocolatey** installed, run this command in an **administrative command prompt**:
+
+```bash
+choco install rabbitmq
+```
+
+**Note:** If you don't have Chocolatey installed, download it from [https://chocolatey.org/install](https://chocolatey.org/install)
+
+### Start RabbitMQ Service
+
+After installation, RabbitMQ should start automatically. To verify:
+
+```bash
+# Check if RabbitMQ service is running
+Get-Service RabbitMQ
+```
+
+To start the service manually:
+
+```bash
+net start RabbitMQ
+```
+
+### Create Admin User
+
+By default, RabbitMQ only has a `guest` user with limited permissions. To create an admin user for the Task Reminder Service:
+
+1. **Open Administrative Command Prompt** and navigate to the RabbitMQ installation directory:
+
+```bash
+cd "C:\Program Files\RabbitMQ Server\rabbitmq_server-xxx\sbin"
+```
+
+2. **Create the admin user** with username `admin` and password `admin123`:
+
+```bash
+rabbitmqctl add_user admin admin123
+```
+
+3. **Set admin user permissions**:
+
+```bash
+rabbitmqctl set_permissions -p "/" admin ".*" ".*" ".*"
+```
+
+4. **Make admin user an administrator**:
+
+```bash
+rabbitmqctl set_user_tags admin administrator
+```
+
+### Verify Setup
+
+Access the RabbitMQ Management UI at:
+- **URL:** http://localhost:15672/
+- **Username:** admin
+- **Password:** admin123
+
+You should see the admin dashboard with queues and connections.
+
+### Configuration File
+
+The Task Reminder Service uses these RabbitMQ settings (in `TaskReminderService/appsettings.json`):
+
+```json
+{
+  "RabbitMq": {
+    "HostName": "localhost",
+    "UserName": "admin",
+    "Password": "admin123",
+    "Port": 5672,
+    "VirtualHost": "/"
+  }
+}
+```
+
 ## ▶️ Running the Application
 
 ### Start Backend API
@@ -190,7 +272,6 @@ dotnet run
 The API will be available at:
 - **HTTP:** http://localhost:5000
 - **HTTPS:** https://localhost:5001
-- **Swagger UI:** https://localhost:5001/swagger
 
 ### Start Frontend Development Server
 ```bash
@@ -204,7 +285,41 @@ The React app will be available at:
 ### Access the Application
 1. Open your browser and navigate to `http://localhost:5173`
 2. The backend API should be running on `http://localhost:5000`
-3. For API documentation, visit `https://localhost:5001/swagger`
+
+### Start Task Reminder Service (Optional)
+
+The Task Reminder Service automatically polls for overdue tasks and publishes reminders to RabbitMQ. This requires RabbitMQ and the `admin` user to be set up.
+
+**Prerequisites:**
+- RabbitMQ running locally on port 5672
+- Admin user created (`admin` / `admin123`)
+- Backend API running on `http://localhost:5000`
+
+**To start the service:**
+
+```bash
+cd TaskReminderService
+dotnet run
+```
+
+**Expected Output:**
+```
+info: TaskReminderService.Services.TaskRemainderService[0]
+      RabbitMQ connection established in service
+info: TaskReminderService.Services.TaskRemainderService[0]
+      ✓ Subscribed to queue 'Remainder'
+info: TaskReminderService.Services.TaskRemainderService[0]
+      Task Reminder Service started
+info: TaskReminderService.Services.TaskRemainderService[0]
+      Checking for overdue tasks...
+warn: TaskReminderService.Services.TaskRemainderService[0]
+      ✓ Hi John Doe your Task is due Fix critical bug in production (Task ID: 1)
+```
+
+The service will:
+- Poll the API every 10 seconds for overdue tasks
+- Publish task reminders to RabbitMQ
+- Log warnings with the user's full name and task details
 
 ## 📁 Project Structure
 
@@ -475,7 +590,6 @@ TaskId | Title              | TagCount | TagNames
 - ✅ API error responses
 
 ### Testing Tools
-- **Swagger UI**: Test API endpoints directly at https://localhost:5001/swagger
 - **Browser DevTools**: Network tab for API calls, Console for errors
 - **React DevTools**: Component state and Redux store inspection
 - **SQL Server Management Studio**: Database verification

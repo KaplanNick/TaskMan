@@ -19,7 +19,7 @@ export const validateUser = (fullName: string, email: string, telephone: string)
 
   if (!telephone.trim()) {
     errors.telephone = 'Telephone is required';
-  } else if (!/^\+?[\d\s\-\(\)]+$/.test(telephone)) {
+  } else if (!/^\+?[1-9]\d{0,14}([\s\-]?\d+)*$/.test(telephone.replace(/[\s\-\(\)]/g, ''))) {
     errors.telephone = 'Telephone is invalid';
   }
 

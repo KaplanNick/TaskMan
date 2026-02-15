@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateTagMutation, useGetAllTagsQuery } from '../services/tagsApi';
 import { validateTag, type TagValidationErrors } from '../validation/tagValidation';
+import { getErrorMessage } from '../types/api';
 import {
   TextField,
   Button,
@@ -67,7 +68,7 @@ export function NewTagForm() {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to create tag: {(error as any)?.data?.message || (error as any)?.message || 'Unknown error'}
+          Failed to create tag: {getErrorMessage(error)}
         </Alert>
       )}
 
@@ -80,7 +81,7 @@ export function NewTagForm() {
         helperText={errors.name || `${name.trim().length}/50 characters (min 2)`}
         margin="normal"
         required
-        inputProps={{ maxLength: 50 }}
+        slotProps={{ htmlInput: { maxLength: 50 } }}
       />
 
       <Box

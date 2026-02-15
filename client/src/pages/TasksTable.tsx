@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGetAllTasksQuery, useDeleteTaskMutation } from '../services/tasksApi';
 import { useGetAllUsersQuery } from '../services/usersApi';
+import { getErrorMessage } from '../types/api';
 import {
   DataGrid,
   GridActionsCellItem,
@@ -17,6 +18,8 @@ import {
   Button,
   Chip,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { EditTaskForm } from './EditTaskForm';
 
 export function TasksTable() {
@@ -28,14 +31,14 @@ export function TasksTable() {
   const { data: users } = useGetAllUsersQuery();
   const [deleteTask, { isLoading: isDeleting }] = useDeleteTaskMutation();
 
-  const handleEdit = (id: GridRowId) => {
+  const handleEdit = useCallback((id: GridRowId) => {
     setEditingTaskId(Number(id));
-  };
+  }, []);
 
-  const handleDeleteClick = (id: GridRowId) => {
+  const handleDeleteClick = useCallback((id: GridRowId) => {
     setTaskToDelete(Number(id));
     setDeleteConfirmOpen(true);
-  };
+  }, []);
 
   const handleDeleteConfirm = async () => {
     if (taskToDelete) {
@@ -49,9 +52,9 @@ export function TasksTable() {
     }
   };
 
-  const handleEditClose = () => {
+  const handleEditClose = useCallback(() => {
     setEditingTaskId(null);
-  };
+  }, []);
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70, type: 'number' },
@@ -110,25 +113,27 @@ export function TasksTable() {
       type: 'actions',
       headerName: 'Actions',
       width: 100,
-      getActions: (params) => [
-        <GridActionsCellItem
-          label="Edit"
-          onClick={() => handleEdit(params.id)}
-          showInMenu
-        />,
-        <GridActionsCellItem
-          label="Delete"
-          onClick={() => handleDeleteClick(params.id)}
-          showInMenu
-        />,
-      ],
+      renderCell: (params) => (
+        <>
+          <GridActionsCellItem
+            icon={<EditIcon />}
+            label="Edit"
+            onClick={() => handleEdit(params.id)}
+          />
+          <GridActionsCellItem
+            icon={<DeleteIcon />}
+            label="Delete"
+            onClick={() => handleDeleteClick(params.id)}
+          />
+        </>
+      ),
     },
   ];
 
   if (error) {
     return (
       <Alert severity="error">
-        Failed to load tasks: {(error as any)?.data?.message || (error as any)?.message || 'Unknown error'}
+        Failed to load tasks: {getErrorMessage(error)}
       </Alert>
     );
   }

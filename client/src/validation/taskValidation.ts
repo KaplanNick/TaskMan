@@ -42,11 +42,13 @@ export const validateTask = (
   if (!dueDate) {
     errors.dueDate = 'Due date is required';
   } else {
-    const date = new Date(dueDate);
+    // Parse as UTC date (HTML date input returns date strings like "2025-02-20")
+    const date = new Date(dueDate + 'T00:00:00Z');
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     const maxDate = new Date();
-    maxDate.setFullYear(maxDate.getFullYear() + 10);
+    maxDate.setUTCFullYear(maxDate.getUTCFullYear() + 10);
+    maxDate.setUTCHours(0, 0, 0, 0);
     
     if (isNaN(date.getTime())) {
       errors.dueDate = 'Invalid date';
@@ -79,7 +81,7 @@ export const validateTask = (
     }
     if (!newUserTelephone.trim()) {
       errors.newUserTelephone = 'Telephone is required';
-    } else if (!/^\+?[\d\s\-\(\)]+$/.test(newUserTelephone)) {
+    } else if (!/^\+?[1-9]\d{0,14}([\s\-]?\d+)*$/.test(newUserTelephone.replace(/[\s\-\(\)]/g, ''))) {
       errors.newUserTelephone = 'Telephone is invalid';
     }
   }

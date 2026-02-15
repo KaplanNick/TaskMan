@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCreateUserMutation } from '../services/usersApi';
+import { useCreateUserMutation, useGetAllUsersQuery } from '../services/usersApi';
 import { validateUser, type UserValidationErrors } from '../validation/userValidation';
+import { getErrorMessage } from '../types/api';
 import {
   TextField,
   Button,
   Box,
   Typography,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 
 export function NewUserForm() {
@@ -18,6 +20,7 @@ export function NewUserForm() {
   const [errors, setErrors] = useState<UserValidationErrors>({});
 
   const [createUser, { isLoading, isSuccess, isError, error }] = useCreateUserMutation();
+  const { data: existingUsers = [] } = useGetAllUsersQuery();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -25,6 +28,28 @@ export function NewUserForm() {
     const validationErrors = validateUser(fullName, email, telephone);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      return;
+    }
+
+    // Check for duplicate email or telephone before submitting
+    const duplicateErrors: UserValidationErrors = {};
+    
+    const emailExists = existingUsers.some(
+      user => user.email.toLowerCase() === email.toLowerCase()
+    );
+    if (emailExists) {
+      duplicateErrors.email = `A user with the email '${email}' already exists.`;
+    }
+
+    const telephoneExists = existingUsers.some(
+      user => user.telephone === telephone
+    );
+    if (telephoneExists) {
+      duplicateErrors.telephone = `A user with the telephone '${telephone}' already exists.`;
+    }
+
+    if (Object.keys(duplicateErrors).length > 0) {
+      setErrors(duplicateErrors);
       return;
     }
 
@@ -45,7 +70,24 @@ export function NewUserForm() {
       // Navigate back to tasks
       navigate('/');
     } catch (err) {
-      // Error is handled by RTK Query
+      // Map error message to the correct field based on error content
+      const errorMessage = getErrorMessage(err);
+      const mappedErrors: any = {};
+
+      // Check which field caused the error based on message content
+      if (errorMessage.toLowerCase().includes('email')) {
+        mappedErrors.email = errorMessage;
+      } else if (errorMessage.toLowerCase().includes('telephone')) {
+        mappedErrors.telephone = errorMessage;
+      } else {
+        // Generic error - show in full name field
+        mappedErrors.fullName = errorMessage;
+      }
+
+      setErrors(prev => ({
+        ...prev,
+        ...mappedErrors
+      }));
     }
   };
 
@@ -72,7 +114,7 @@ export function NewUserForm() {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to create user: {(error as any)?.data?.message || (error as any)?.message || 'Unknown error'}
+          Failed to create user: {getErrorMessage(error)}
         </Alert>
       )}
 
@@ -85,6 +127,7 @@ export function NewUserForm() {
         helperText={errors.fullName}
         margin="normal"
         required
+        disabled={isLoading}
       />
 
       <TextField
@@ -97,6 +140,7 @@ export function NewUserForm() {
         helperText={errors.email}
         margin="normal"
         required
+        disabled={isLoading}
       />
 
       <TextField
@@ -108,6 +152,7 @@ export function NewUserForm() {
         helperText={errors.telephone}
         margin="normal"
         required
+        disabled={isLoading}
       />
 
       <Box
@@ -124,6 +169,7 @@ export function NewUserForm() {
           variant="contained"
           disabled={isLoading}
           sx={{ flex: 1 }}
+          startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
         >
           {isLoading ? 'Creating...' : 'Create User'}
         </Button>
