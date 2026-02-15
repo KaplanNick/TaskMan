@@ -6,6 +6,7 @@ A full-stack web application for managing user tasks with a .NET Core backend, R
 - [Overview](#overview)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
 - [Prerequisites](#prerequisites)
 - [Installation & Setup](#installation--setup)
 - [Database Setup](#database-setup)
@@ -16,6 +17,7 @@ A full-stack web application for managing user tasks with a .NET Core backend, R
 - [SQL Query - Tasks with Multiple Tags](#sql-query---tasks-with-multiple-tags)
 - [Key Implementations](#key-implementations)
 - [Validation Rules](#validation-rules)
+- [Troubleshooting](#troubleshooting)
 
 ## 🎯 Overview
 
@@ -80,6 +82,33 @@ Each task contains:
 - **Material-UI (MUI) 7.3.8** - Component library
 - **MUI DataGrid 8.27.1** - Advanced data table
 - **Vite** - Build tool and dev server
+
+### Background Service
+- **.NET Core Worker Service** - Long-running background service
+- **RabbitMQ.Client 6.7.0** - Message queue integration
+
+## 🚀 Quick Start
+
+For those who want to get started quickly (assuming prerequisites are installed):
+
+```bash
+# 1. Clone and navigate to project
+cd TaskMan
+
+# 2. Setup and run backend
+cd API
+dotnet restore
+dotnet run
+# API will be at http://localhost:5000
+
+# 3. In a new terminal, setup and run frontend
+cd client
+npm install
+npm run dev
+# App will be at http://localhost:5173
+```
+
+**Note:** Database will be automatically created and seeded on first API run. For RabbitMQ Task Reminder Service setup, see the [RabbitMQ Setup](#rabbitmq-setup-optional---required-for-task-reminder-service) section.
 
 ## 📦 Prerequisites
 
@@ -283,8 +312,18 @@ The React app will be available at:
 - **Local:** http://localhost:5173
 
 ### Access the Application
-1. Open your browser and navigate to `http://localhost:5173`
-2. The backend API should be running on `http://localhost:5000`
+
+1. **Open your browser** and navigate to `http://localhost:5173`
+2. You should see the TaskMan application homepage
+3. The backend API is running at `http://localhost:5000`
+4. Test the API directly at `http://localhost:5000/api/tasks`
+
+**What you should see:**
+- Tasks table with pre-seeded data (10 sample tasks)
+- Navbar with options to create Tasks, Users, and Tags
+- Fully functional CRUD operations
+
+**Note:** The database is automatically created, migrated, and seeded with sample data when you first run the API.
 
 ### Start Task Reminder Service (Optional)
 
@@ -584,26 +623,32 @@ TaskId | Title              | TagCount | TagNames
 |-------|-------|
 | Name | Required, 2-50 characters, unique |
 
-## 🧪 Testing
-
-### Manual Testing Checklist
-- ✅ Create, read, update, delete tasks
-- ✅ Create, read, update, delete users
-- ✅ Create, read, update, delete tags
-- ✅ Assign multiple tags to a task
-- ✅ Form validation (all fields)
-- ✅ Error handling and user feedback
-- ✅ Responsive design (mobile, tablet, desktop)
-- ✅ Data grid sorting and filtering
-- ✅ Navigation and routing
-- ✅ API error responses
-
-### Testing Tools
-- **Browser DevTools**: Network tab for API calls, Console for errors
-- **React DevTools**: Component state and Redux store inspection
-- **SQL Server Management Studio**: Database verification
-
 ## 🐛 Troubleshooting
+
+### Common Issues
+
+#### "Cannot connect to SQL Server"
+- Verify SQL Server is running: `Get-Service MSSQLSERVER` (Windows)
+- Check connection string in `API/appsettings.json`
+- Try using LocalDB: `Server=(localdb)\\mssqllocaldb;...`
+
+#### "Database already exists" error
+- Drop and recreate: `dotnet ef database drop` then `dotnet ef database update`
+- Or manually delete TaskManDb in SQL Server Management Studio
+
+#### "Port already in use"
+- Backend (5000/7000): Change ports in `API/Properties/launchSettings.json`
+- Frontend (5173): Change port in `vite.config.ts` or use `PORT=3000 npm run dev`
+
+#### Frontend can't connect to API
+- Check CORS configuration in `API/Program.cs`
+- Verify API is running on http://localhost:5000
+- Check browser console for specific error messages
+
+#### RabbitMQ connection failed
+- Verify RabbitMQ service is running: `Get-Service RabbitMQ`
+- Check admin user exists and has correct permissions
+- Verify port 5672 is not blocked by firewall
 
 ### Database Connection Issues
 ```bash
