@@ -1,8 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using API.Data;
-using API.Entities;
 using API.DTOs;
+using API.Interfaces;
+using API.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
@@ -10,30 +9,18 @@ namespace API.Controllers;
 [Route("api/[controller]")]
 public class TagsController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly ITagService _tagService;
 
-    public TagsController(AppDbContext db)
+    public TagsController(ITagService tagService)
     {
-        _db = db;
+        _tagService = tagService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        try
-        {
-            var tags = await _db.Tags
-                .AsNoTracking()
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            
-            var tagDtos = tags.Select(t => new TagDto { Id = t.Id, Name = t.Name }).ToList();
-            return Ok(tagDtos);
-        }
-        catch (Exception)
-        {
-            return StatusCode(500, new { message = "Failed to retrieve tags" });
-        }
+        var result = await _tagService.GetAllAsync();
+        return HandleResult(result, Ok);
     }
 
     [HttpGet("{id:int}")]
@@ -42,11 +29,8 @@ public class TagsController : ControllerBase
         if (id <= 0)
             return BadRequest(new { message = "Invalid tag ID." });
 
-        var tag = await _db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
-        if (tag is null)
-            return NotFound();
-
-        return Ok(new TagDto { Id = tag.Id, Name = tag.Name });
+        var result = await _tagService.GetByIdAsync(id);
+        return HandleResult(result, Ok);
     }
 
     [HttpPost]
@@ -58,23 +42,8 @@ public class TagsController : ControllerBase
             return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
         }
 
-        var validationError = await ValidateTagName(dto.Name, null);
-        if (validationError != null)
-            return BadRequest(new { message = validationError });
-
-        var tag = new Tag { Name = dto.Name.Trim() };
-        
-        try
-        {
-            _db.Tags.Add(tag);
-            await _db.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = tag.Id }, 
-                new TagDto { Id = tag.Id, Name = tag.Name });
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to create tag due to database error" });
-        }
+        var result = await _tagService.CreateAsync(dto);
+        return HandleResult(result, created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created));
     }
 
     [HttpPut("{id:int}")]
@@ -89,25 +58,8 @@ public class TagsController : ControllerBase
             return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
         }
 
-        var tag = await _db.Tags.FindAsync(id);
-        if (tag is null)
-            return NotFound();
-
-        var validationError = await ValidateTagName(dto.Name, id);
-        if (validationError != null)
-            return BadRequest(new { message = validationError });
-
-        tag.Name = dto.Name.Trim();
-        
-        try
-        {
-            await _db.SaveChangesAsync();
-            return Ok(new TagDto { Id = tag.Id, Name = tag.Name });
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to update tag due to database error" });
-        }
+        var result = await _tagService.UpdateAsync(id, dto);
+        return HandleResult(result, Ok);
     }
 
     [HttpDelete("{id:int}")]
@@ -116,47 +68,21 @@ public class TagsController : ControllerBase
         if (id <= 0)
             return BadRequest(new { message = "Invalid tag ID." });
 
-        var tag = await _db.Tags
-            .Include(t => t.TaskTags)
-            .FirstOrDefaultAsync(t => t.Id == id);
-
-        if (tag is null)
-            return NotFound();
-
-        // Check if tag is in use
-        if (tag.TaskTags.Any())
-            return BadRequest(new { message = $"Cannot delete tag '{tag.Name}' because it is assigned to {tag.TaskTags.Count} task(s)." });
-
-        try
-        {
-            _db.Tags.Remove(tag);
-            await _db.SaveChangesAsync();
-            return NoContent();
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to delete tag due to database error" });
-        }
+        var result = await _tagService.DeleteAsync(id);
+        return HandleResult(result, _ => NoContent());
     }
 
-    private async Task<string?> ValidateTagName(string name, int? excludeId)
+    private IActionResult HandleResult<T>(ServiceResult<T> result, Func<T, IActionResult> onSuccess)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return "Tag name cannot be empty or contain only whitespace.";
+        if (result.Success && result.Value != null)
+            return onSuccess(result.Value);
 
-        var trimmedName = name.Trim();
-
-        // Check for duplicate tag names (case-insensitive)
-        var query = _db.Tags.Where(t => t.Name.ToLower() == trimmedName.ToLower());
-        
-        if (excludeId.HasValue)
-            query = query.Where(t => t.Id != excludeId.Value);
-
-        var existingTag = await query.FirstOrDefaultAsync();
-        
-        if (existingTag != null)
-            return $"A tag with the name '{existingTag.Name}' already exists.";
-
-        return null;
+        return result.ErrorType switch
+        {
+            ServiceErrorType.NotFound => NotFound(),
+            ServiceErrorType.Validation => BadRequest(new { message = result.ErrorMessage ?? "Invalid input" }),
+            ServiceErrorType.Database => StatusCode(500, new { message = result.ErrorMessage ?? "Database error" }),
+            _ => StatusCode(500, new { message = result.ErrorMessage ?? "Unexpected error" })
+        };
     }
 }

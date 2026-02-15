@@ -402,13 +402,13 @@ sc.exe delete TaskManReminderService
 ```
 info: TaskReminderService.Worker[0]
       Task Reminder Service starting at 02/15/2026 14:51:58 +02:00
-info: TaskReminderService.Services.TaskRemainderService[0]
+info: TaskReminderService.Services.TaskReminderService[0]
       Initializing Task Reminder Service...
-info: TaskReminderService.Services.TaskRemainderService[0]
+info: TaskReminderService.Services.TaskReminderService[0]
       Starting polling for overdue tasks...
-info: TaskReminderService.Services.TaskRemainderService[0]
+info: TaskReminderService.Services.TaskReminderService[0]
       ✓ Task Reminder Service started successfully
-info: TaskReminderService.Services.TaskRemainderService[0]
+info: TaskReminderService.Services.TaskReminderService[0]
       ✓ RabbitMQ initialized and subscribed to queue
 ```
 
@@ -422,7 +422,7 @@ The service will:
 - Log warnings with the user's full name and task details
 
 **Consumer behavior (self-consume):**
-- By default, the same service also consumes messages from the `Remainder` queue and acknowledges them immediately.
+- By default, the same service also consumes messages from the `Reminder` queue and acknowledges them immediately.
 - This means the queue will often look empty in RabbitMQ UI because messages are processed right away.
 - The queue payload is JSON, while the consumer logs a formatted plain-text reminder line.
 - To see messages pile up in the queue, set `TaskReminder:EnableConsumer` to `false` and restart the service.
@@ -431,7 +431,7 @@ The service will:
 **How to view messages in RabbitMQ UI:**
 1. Set `TaskReminder:EnableConsumer` to `false` in `TaskReminderService/appsettings.json`.
 2. Restart the service (or run it in console mode).
-3. Open http://localhost:15672 and check the `Remainder` queue.
+3. Open http://localhost:15672 and check the `Reminder` queue.
 4. Use the "Get messages" section to read messages (this is destructive by default).
 5. Note: the payload will be JSON even though the consumer logs a plain-text reminder.
 
@@ -468,6 +468,15 @@ TaskMan/
 │   │   ├── Tag.cs                     # Tag entity
 │   │   ├── TaskTag.cs                 # Junction table for N:N
 │   │   └── TaskPriority.cs            # Priority enum
+│   ├── Interfaces/                    # Service interfaces
+│   │   ├── ITaskService.cs            # Task service interface
+│   │   ├── IUserService.cs            # User service interface
+│   │   └── ITagService.cs             # Tag service interface
+│   ├── Services/                      # Business logic layer
+│   │   ├── TaskService.cs             # Task service implementation
+│   │   ├── UserService.cs             # User service implementation
+│   │   ├── TagService.cs              # Tag service implementation
+│   │   └── ServiceResult.cs           # Service result wrapper
 │   ├── Migrations/                    # EF Core migrations
 │   ├── Program.cs                     # Application entry point
 │   ├── appsettings.json              # Configuration
@@ -506,7 +515,7 @@ TaskMan/
 │
 ├── TaskReminderService/              # Background Service for Task Reminders
 │   ├── Services/                     # Service implementations
-│   │   └── TaskRemainderService.cs   # RabbitMQ integration
+│   │   └── TaskReminderService.cs   # RabbitMQ integration
 │   ├── Program.cs                    # Service entry point
 │   ├── Worker.cs                     # Background worker
 │   ├── appsettings.json             # Service configuration
@@ -623,7 +632,15 @@ TaskId | Title              | TagCount | TagNames
 
 ## 🔑 Key Implementations
 
-### 1. Entity Framework Configuration
+### 1. Service Layer Architecture
+- **Interface-Based Design**: Service contracts in `API/Interfaces` directory
+- **Dependency Injection**: Services registered in DI container with scoped lifetime
+- **Service Result Pattern**: Generic `ServiceResult<T>` wrapper for consistent error handling
+- **Business Logic Separation**: Controllers act as thin HTTP adapters, all logic in services
+- **Error Type Enum**: Standardized error types (Validation, NotFound, Database, Unknown)
+- **Testability**: Interface-based design enables easy unit testing and mocking
+
+### 2. Entity Framework Configuration
 - **Database Context**: Centralized DbContext with DbSet properties for all entities
 - **Relationships**: 
   - One-to-Many: User to Tasks
@@ -631,14 +648,14 @@ TaskId | Title              | TagCount | TagNames
 - **Migrations**: Automatic database schema generation and updates
 - **Seeding**: Initial data population for testing and demonstration
 
-### 2. State Management (Redux Toolkit)
+### 3. State Management (Redux Toolkit)
 - **RTK Query**: Automatic API call caching and state management
 - **Normalized Cache**: Efficient data storage and updates
 - **Automatic Refetching**: Data updates propagate across the application
 - **Optimistic Updates**: Immediate UI feedback with rollback on error
 - **Tagged Cache Invalidation**: Automatic data refresh on mutations
 
-### 3. Validation Strategy
+### 4. Validation Strategy
 
 #### Frontend Validation (React)
 - **Real-time validation**: As users type
@@ -652,37 +669,37 @@ TaskId | Title              | TagCount | TagNames
 - **ModelState validation**: Automatic validation checking
 - **Comprehensive error messages**: Detailed feedback for debugging
 
-### 4. N:N Relationship Implementation
+### 5. N:N Relationship Implementation
 - **Junction Table**: TaskTags entity for Many-to-Many relationship
 - **Navigation Properties**: Seamless traversal between Tasks and Tags
 - **Cascade Behavior**: Proper handling of deletions
 - **Tag Selection**: Multi-select dropdown with chip display
 - **API DTOs**: TagIds array for efficient data transfer
 
-### 5. Responsive UI Design
+### 6. Responsive UI Design
 - **Material-UI Theme**: Consistent design system
 - **Breakpoints**: Responsive layouts for different screen sizes
 - **Mobile-First**: Works seamlessly on mobile devices
 - **Accessibility**: ARIA labels and keyboard navigation
 - **User Experience**: Loading states, success messages, error handling
 
-### 6. Error Handling
+### 7. Error Handling
 - **Try-Catch Blocks**: Comprehensive error catching
 - **Custom Error Messages**: User-friendly error descriptions
 - **API Error Responses**: Structured error objects
 - **Fallback UI**: Graceful degradation on errors
 - **Logging**: Console and server-side logging for debugging
 
-### 7. RESTful API Design
+### 8. RESTful API Design
 - **Resource-Based URLs**: Clear, predictable endpoint structure
 - **HTTP Verbs**: Proper use of GET, POST, PUT, DELETE
 - **Status Codes**: Correct HTTP status codes (200, 201, 400, 404, etc.)
 - **DTOs**: Separation of database entities and API contracts
 - **CORS Configuration**: Secure cross-origin access
 
-### 8. Windows Service with RabbitMQ Integration
+### 9. Windows Service with RabbitMQ Integration
 - **Windows Service**: .NET Core Worker Service that can run as a Windows Service
-- **Task Polling**: Pulls overdue tasks from API and inserts into RabbitMQ queue "Remainder"
+- **Task Polling**: Pulls overdue tasks from API and inserts into RabbitMQ queue "Reminder"
 - **Queue Subscription**: Same service subscribes to queue and logs reminders
 - **Message Format**: Logs "Hi {UserFullName} your Task is due {TaskTitle} (Task ID: {TaskId})"
 - **Concurrent Updates Handling**:
@@ -785,7 +802,8 @@ If ports 5000, 7000, or 5173 are in use:
 ## 📝 Development Notes
 
 ### Best Practices Implemented
-- ✅ Separation of Concerns (Controllers, Services, Entities, DTOs)
+- ✅ Service Layer Pattern with Interface-Based Design
+- ✅ Separation of Concerns (Controllers, Services, Interfaces, Entities, DTOs)
 - ✅ Repository Pattern (via Entity Framework DbContext)
 - ✅ Dependency Injection
 - ✅ Async/Await for all I/O operations

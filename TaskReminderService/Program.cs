@@ -12,7 +12,7 @@ try
         .ConfigureServices(services =>
         {
             services.AddHttpClient();
-            services.AddSingleton<ITaskRemainderService, global::TaskReminderService.Services.TaskRemainderService>();
+            services.AddSingleton<ITaskReminderService, global::TaskReminderService.Services.TaskReminderService>();
             services.AddHostedService<Worker>();
         })
         .ConfigureLogging(logging =>

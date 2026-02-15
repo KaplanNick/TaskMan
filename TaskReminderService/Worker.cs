@@ -5,12 +5,12 @@ namespace TaskReminderService;
 public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
-    private readonly ITaskRemainderService _taskRemainderService;
+    private readonly ITaskReminderService _taskReminderService;
 
-    public Worker(ILogger<Worker> logger, ITaskRemainderService taskRemainderService)
+    public Worker(ILogger<Worker> logger, ITaskReminderService taskReminderService)
     {
         _logger = logger;
-        _taskRemainderService = taskRemainderService;
+        _taskReminderService = taskReminderService;
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -28,7 +28,7 @@ public class Worker : BackgroundService
             
             // Initialize service - this is called in background service context
             // which is already running in a background thread
-            await _taskRemainderService.StartAsync();
+            await _taskReminderService.StartAsync();
             
             // Keep running until cancellation is requested
             await Task.Delay(Timeout.Infinite, stoppingToken);
@@ -45,7 +45,7 @@ public class Worker : BackgroundService
         {
             try
             {
-                await _taskRemainderService.StopAsync();
+                await _taskReminderService.StopAsync();
             }
             catch (Exception ex)
             {

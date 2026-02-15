@@ -1,8 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using API.Data;
-using API.Entities;
 using API.DTOs;
+using API.Interfaces;
+using API.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
@@ -10,30 +9,18 @@ namespace API.Controllers;
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IUserService _userService;
 
-    public UsersController(AppDbContext db)
+    public UsersController(IUserService userService)
     {
-        _db = db;
+        _userService = userService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        try
-        {
-            var users = await _db.Users
-                .AsNoTracking()
-                .OrderBy(u => u.FullName)
-                .ToListAsync();
-            
-            var userDtos = users.Select(MapToDto).ToList();
-            return Ok(userDtos);
-        }
-        catch (Exception)
-        {
-            return StatusCode(500, new { message = "Failed to retrieve users" });
-        }
+        var result = await _userService.GetAllAsync();
+        return HandleResult(result, Ok);
     }
 
     [HttpGet("{id:int}")]
@@ -42,11 +29,8 @@ public class UsersController : ControllerBase
         if (id <= 0)
             return BadRequest(new { message = "Invalid user ID." });
 
-        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-        if (user is null)
-            return NotFound();
-
-        return Ok(MapToDto(user));
+        var result = await _userService.GetByIdAsync(id);
+        return HandleResult(result, Ok);
     }
 
     [HttpPost]
@@ -58,27 +42,8 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
         }
 
-        var validationError = await ValidateUser(dto.Email, dto.Telephone, null);
-        if (validationError != null)
-            return BadRequest(new { message = validationError });
-
-        var user = new User 
-        { 
-            FullName = dto.FullName.Trim(),
-            Email = dto.Email.Trim().ToLowerInvariant(),
-            Telephone = dto.Telephone.Trim()
-        };
-
-        try
-        {
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = user.Id }, MapToDto(user));
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to create user due to database error" });
-        }
+        var result = await _userService.CreateAsync(dto);
+        return HandleResult(result, created => CreatedAtAction(nameof(GetById), new { id = created.Id }, created));
     }
 
     [HttpPut("{id:int}")]
@@ -93,27 +58,8 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = errors.FirstOrDefault() ?? "Invalid input" });
         }
 
-        var user = await _db.Users.FindAsync(id);
-        if (user is null)
-            return NotFound();
-
-        var validationError = await ValidateUser(dto.Email, dto.Telephone, id);
-        if (validationError != null)
-            return BadRequest(new { message = validationError });
-
-        user.FullName = dto.FullName.Trim();
-        user.Email = dto.Email.Trim().ToLowerInvariant();
-        user.Telephone = dto.Telephone.Trim();
-
-        try
-        {
-            await _db.SaveChangesAsync();
-            return Ok(MapToDto(user));
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to update user due to database error" });
-        }
+        var result = await _userService.UpdateAsync(id, dto);
+        return HandleResult(result, Ok);
     }
 
     [HttpDelete("{id:int}")]
@@ -122,68 +68,21 @@ public class UsersController : ControllerBase
         if (id <= 0)
             return BadRequest(new { message = "Invalid user ID." });
 
-        var user = await _db.Users
-            .Include(u => u.Tasks)
-            .FirstOrDefaultAsync(u => u.Id == id);
-
-        if (user is null)
-            return NotFound();
-
-        // Check if user has tasks
-        if (user.Tasks.Any())
-            return BadRequest(new { message = $"Cannot delete user '{user.FullName}' because they have {user.Tasks.Count} assigned task(s)." });
-
-        try
-        {
-            _db.Users.Remove(user);
-            await _db.SaveChangesAsync();
-            return NoContent();
-        }
-        catch (DbUpdateException)
-        {
-            return StatusCode(500, new { message = "Failed to delete user due to database error" });
-        }
+        var result = await _userService.DeleteAsync(id);
+        return HandleResult(result, _ => NoContent());
     }
 
-    private async Task<string?> ValidateUser(string email, string telephone, int? excludeId)
+    private IActionResult HandleResult<T>(ServiceResult<T> result, Func<T, IActionResult> onSuccess)
     {
-        if (string.IsNullOrWhiteSpace(email))
-            return "Email cannot be empty or contain only whitespace.";
+        if (result.Success && result.Value != null)
+            return onSuccess(result.Value);
 
-        if (string.IsNullOrWhiteSpace(telephone))
-            return "Telephone cannot be empty or contain only whitespace.";
-
-        var trimmedEmail = email.Trim().ToLowerInvariant();
-        var trimmedTelephone = telephone.Trim();
-
-        // Check for duplicate email (case-insensitive)
-        // Email is already stored lowercase in DB, so direct comparison is safe
-        var emailQuery = _db.Users.Where(u => u.Email == trimmedEmail);
-        if (excludeId.HasValue)
-            emailQuery = emailQuery.Where(u => u.Id != excludeId.Value);
-
-        var existingUserByEmail = await emailQuery.FirstOrDefaultAsync();
-        if (existingUserByEmail != null)
-            return $"A user with the email '{existingUserByEmail.Email}' already exists.";
-
-        // Check for duplicate telephone
-        var telephoneQuery = _db.Users.Where(u => u.Telephone == trimmedTelephone);
-        if (excludeId.HasValue)
-            telephoneQuery = telephoneQuery.Where(u => u.Id != excludeId.Value);
-
-        var existingUserByTelephone = await telephoneQuery.FirstOrDefaultAsync();
-        if (existingUserByTelephone != null)
-            return $"A user with the telephone number '{existingUserByTelephone.Telephone}' already exists.";
-
-        return null;
-    }
-
-    private static UserDto MapToDto(User user) =>
-        new()
+        return result.ErrorType switch
         {
-            Id = user.Id,
-            FullName = user.FullName,
-            Email = user.Email,
-            Telephone = user.Telephone
+            ServiceErrorType.NotFound => NotFound(),
+            ServiceErrorType.Validation => BadRequest(new { message = result.ErrorMessage ?? "Invalid input" }),
+            ServiceErrorType.Database => StatusCode(500, new { message = result.ErrorMessage ?? "Database error" }),
+            _ => StatusCode(500, new { message = result.ErrorMessage ?? "Unexpected error" })
         };
+    }
 }

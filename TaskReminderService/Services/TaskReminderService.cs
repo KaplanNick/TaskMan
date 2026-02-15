@@ -8,21 +8,21 @@ using System.Collections.Concurrent;
 
 namespace TaskReminderService.Services;
 
-public interface ITaskRemainderService
+public interface ITaskReminderService
 {
     Task StartAsync();
     Task StopAsync();
 }
 
-public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
+public class TaskReminderService : ITaskReminderService, IAsyncDisposable
 {
     private IConnection? _connection;
     private IModel? _publishChannel;
     private IModel? _consumeChannel;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<TaskRemainderService> _logger;
+    private readonly ILogger<TaskReminderService> _logger;
     private readonly HttpClient _httpClient;
-    private const string QUEUE_NAME = "Remainder";
+    private const string QUEUE_NAME = "Reminder";
     private CancellationTokenSource _cancellationTokenSource = new();
     private const int MAX_RETRIES = 5;
     private const int RETRY_DELAY_MS = 2000;
@@ -30,9 +30,9 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
     private readonly ConcurrentDictionary<int, DateTime> _reminded = new();
     private readonly TimeSpan _dedupeWindow = TimeSpan.FromHours(12);
 
-    public TaskRemainderService(
+    public TaskReminderService(
         IConfiguration configuration,
-        ILogger<TaskRemainderService> logger,
+        ILogger<TaskReminderService> logger,
         IHttpClientFactory httpClientFactory)
     {
         _configuration = configuration;
@@ -107,7 +107,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             if (GetEnableConsumer())
             {
                 SubscribeToQueue();
-                _logger.LogInformation("✓ RabbitMQ connected and subscribed to 'Remainder' queue");
+                _logger.LogInformation("✓ RabbitMQ connected and subscribed to 'Reminder' queue");
             }
             else
             {
@@ -194,7 +194,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
 
                         // Update reminder timestamp
                         _reminded[task.Id] = now;
-                        await PublishTaskRemainderAsync(task, cancellationToken);
+                        await PublishTaskReminderAsync(task, cancellationToken);
                     }
 
                     if (overdueTasks.Any())
@@ -225,7 +225,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
         }
     }
 
-    private async Task PublishTaskRemainderAsync(TaskDto task, CancellationToken cancellationToken = default)
+    private async Task PublishTaskReminderAsync(TaskDto task, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -294,11 +294,11 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                 body: body
             );
 
-                _logger.LogInformation($"Task remainder published: Task {task.Id} - {task.Title}");
+                _logger.LogInformation($"Task reminder published: Task {task.Id} - {task.Title}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to publish task remainder for task {task.Id}");
+                _logger.LogError(ex, $"Failed to publish task reminder for task {task.Id}");
             }
         }
 
@@ -334,10 +334,10 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
                 {
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
-                    var taskData = JsonSerializer.Deserialize<TaskRemainder>(message,
+                    var taskData = JsonSerializer.Deserialize<TaskReminder>(message,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    // Log the remainder - THIS IS THE KEY LINE
+                    // Log the reminder - THIS IS THE KEY LINE
                     _logger.LogWarning($"✓ Hi {taskData?.UserFullName} your Task is due {taskData?.Title} (Task ID: {taskData?.TaskId})");
 
                     // Acknowledge message after processing
@@ -355,7 +355,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             _consumeChannel.BasicConsume(
                 queue: QUEUE_NAME,
                 autoAck: false,
-                consumerTag: "TaskRemainderConsumer",
+                consumerTag: "TaskReminderConsumer",
                 consumer: consumer
             );
 
@@ -387,7 +387,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
             _connection?.Close();
             _connection?.Dispose();
 
-            _logger.LogInformation("TaskRemainderService resources disposed successfully");
+            _logger.LogInformation("TaskReminderService resources disposed successfully");
         }
         catch (Exception ex)
         {
@@ -398,7 +398,7 @@ public class TaskRemainderService : ITaskRemainderService, IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
-    private class TaskRemainder
+    private class TaskReminder
     {
         public int TaskId { get; set; }
         public string Title { get; set; } = string.Empty;
